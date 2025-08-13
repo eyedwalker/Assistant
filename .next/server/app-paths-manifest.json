@@ -1,0 +1,6 @@
+{
+  "/api/documents/process-url/route": "app/api/documents/process-url/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/page": "app/page.js"
+}

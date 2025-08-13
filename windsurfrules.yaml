@@ -1,0 +1,83 @@
+# AI Assistant Platform - Volatility-Based Decomposition (VBD) Rules
+# Architecture: VBD for eyecare professional AI assistant platform
+
+architecture: VBD
+project_type: ai_assistant_platform
+
+# VBD Folder Structure
+folders:
+  engines: /src/lib/engines
+  managers: /src/lib/managers  
+  accessors: /src/lib/accessors
+  services: /src/lib/services
+  types: /src/types
+  utils: /src/lib/utils
+
+# VBD Naming Conventions
+naming:
+  engines: "*Engine.ts"
+  managers: "*Manager.ts"
+  accessors: "*Accessor.ts"
+  services: "*Service.ts"
+  types: "*.types.ts"
+  interfaces: "I*.ts"
+
+# VBD Layer Responsibilities
+layers:
+  engine:
+    description: "Core algorithms and business logic - stable, reusable components"
+    examples:
+      - "DocumentProcessingEngine: Core document extraction algorithms"
+      - "AIAnalysisEngine: Core AI processing and embedding logic"
+      - "SearchEngine: Core search and retrieval algorithms"
+      - "SecurityEngine: Core encryption and validation logic"
+    
+  manager:
+    description: "Orchestration and business rules - volatile, domain-specific logic"
+    examples:
+      - "DocumentManager: Orchestrates document workflow, applies business rules"
+      - "ConversationManager: Manages chat sessions, applies conversation policies"
+      - "UserManager: Handles user operations, applies access control policies"
+      - "ProcessingManager: Coordinates multi-step processing workflows"
+    
+  accessor:
+    description: "Data access and external interfaces - stable, technology-specific"
+    examples:
+      - "MongoDBAccessor: Database operations and queries"
+      - "S3Accessor: File storage operations"
+      - "AnthropicAccessor: AI service integration"
+      - "CacheAccessor: Redis/memory cache operations"
+
+# Design Principles
+principles:
+  - "Engines contain pure business logic with no external dependencies"
+  - "Managers orchestrate engines and handle volatile business rules"
+  - "Accessors handle all external system interactions"
+  - "Each layer should be independently testable"
+  - "Dependencies flow: Manager -> Engine, Manager -> Accessor"
+  - "Engines should never directly call Accessors"
+
+# Multi-tenant Considerations
+multi_tenant:
+  access_levels: ["PUBLIC", "ACCOUNT", "COMPANY", "OFFICE"]
+  security_engine: "Handles access control algorithms"
+  tenant_manager: "Applies tenant-specific business rules"
+  data_accessor: "Enforces tenant data isolation"
+
+# Healthcare Compliance
+healthcare:
+  phi_engine: "Core PHI detection and anonymization algorithms"
+  compliance_manager: "Applies healthcare-specific business rules"
+  audit_accessor: "Handles audit logging and compliance reporting"
+
+# Performance Targets
+performance:
+  document_processing: "<30s"
+  chat_response: "<5s"
+  search_query: "<2s"
+  
+# Testing Strategy
+testing:
+  unit_tests: "Test each layer independently"
+  integration_tests: "Test Manager-Engine-Accessor interactions"
+  e2e_tests: "Test complete workflows"
