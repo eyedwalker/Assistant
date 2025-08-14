@@ -12,7 +12,7 @@
 import { CrawledPage, LinkedResource, WebMetadata } from '@/lib/types/content';
 import * as cheerio from 'cheerio';
 import { URL } from 'url';
-import * as robots from 'robots-parser';
+import robots from 'robots-parser';
 
 export interface CrawlSession {
   id: string;
@@ -80,7 +80,7 @@ export class WebCrawlingEngine {
       try {
         session.robotsParser = await this.loadRobotsTxt(baseUrl, mergedOptions.userAgent);
       } catch (error) {
-        console.warn('Failed to load robots.txt:', error.message);
+        console.warn('Failed to load robots.txt:', error instanceof Error ? error.message : String(error));
       }
     }
 

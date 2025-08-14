@@ -56,14 +56,28 @@ export class DocumentManager {
       this.validateBusinessRules(request);
 
       // Step 1: Extract raw content
+      console.log('🔄 Step 1: Extracting raw content...');
       const rawContent = await this.extractRawContent(request);
+      console.log('📄 Raw content extracted:', { 
+        length: rawContent?.length || 0, 
+        preview: rawContent?.substring(0, 200) || 'NO CONTENT'
+      });
       await this.updateJobProgress(job.jobId, 25, 'Content extracted');
 
       // Step 2: Process content using engine (core algorithms)
+      console.log('🔄 Step 2: Processing content with engine...');
       const processingOptions = this.buildProcessingOptions(request);
       const processedResult = DocumentProcessingEngine.extractContent(rawContent, processingOptions);
       
+      console.log('📊 Processing result:', { 
+        success: processedResult.success, 
+        contentLength: processedResult.content?.length || 0,
+        error: processedResult.error,
+        hasContent: !!processedResult.content
+      });
+      
       if (!processedResult.success) {
+        console.error('❌ Processing failed:', processedResult.error);
         throw new Error(processedResult.error);
       }
       await this.updateJobProgress(job.jobId, 50, 'Content processed');
@@ -85,7 +99,25 @@ export class DocumentManager {
         metadata: request.metadata
       });
 
-      // Step 5: Complete job
+      // Step 5: Store content for RAG retrieval (CRITICAL MISSING STEP)
+      if (processedResult.content) {
+        console.log('🔄 Storing content for RAG retrieval...');
+        await this.storeContentForRAG({
+          documentId,
+          content: processedResult.content,
+          title: processedResult.metadata?.title || request.metadata?.title || 'Untitled Document',
+          source: request.url || 'uploaded-file',
+          userId: request.userId,
+          tenantId: request.tenantId,
+          accessLevel: request.accessLevel
+        });
+        console.log('✅ Content stored for RAG retrieval');
+        await this.updateJobProgress(job.jobId, 90, 'Content stored for RAG');
+      } else {
+        console.log('❌ No content available for RAG storage');
+      }
+
+      // Step 6: Complete job
       const completedJob = await this.completeJob(job.jobId, {
         documentId,
         ...processedResult,
@@ -215,20 +247,48 @@ export class DocumentManager {
    * Extract raw content based on source type
    */
   private async extractRawContent(request: DocumentProcessingRequest): Promise<string> {
+    console.log('🔄 extractRawContent called with:', { hasContent: !!request.content, url: request.url });
+    
     if (request.content) {
+      console.log('✅ Using provided content, length:', request.content.length);
       return request.content;
     }
 
     if (request.url) {
-      // Use existing robust content extractor
-      const contentExtractor = (await import('../services/robust-content-extractor')).default;
-      const result = await contentExtractor.extractContent(request.url);
+      console.log('🔄 Extracting content from URL:', request.url);
       
-      if (!result.success) {
-        throw new Error(`Failed to extract content from URL: ${result.error}`);
+      try {
+        // Use robust content extractor for advanced multi-layer, video-embedded content
+        const { default: robustExtractor } = await import('../services/robust-content-extractor');
+        const result = await robustExtractor.extractContent(request.url, {
+          enableJavaScript: true,
+          timeout: 45000,
+          waitForSelector: 'body',
+          followRedirects: true,
+          maxRedirects: 10
+        });
+        
+        console.log('📄 Content extraction result:', { 
+          success: result.success, 
+          contentLength: result.content?.length || 0,
+          error: result.error 
+        });
+        
+        if (!result.success) {
+          throw new Error(`Failed to extract content from URL: ${result.error}`);
+        }
+        
+        if (!result.content || result.content.trim().length === 0) {
+          throw new Error('No content extracted from URL');
+        }
+        
+        console.log('✅ Content extracted successfully, length:', result.content.length);
+        return result.content;
+        
+      } catch (error) {
+        console.error('❌ Content extraction failed:', error);
+        throw error;
       }
-      
-      return result.content || '';
     }
 
     throw new Error('No content or URL provided');
@@ -358,6 +418,132 @@ export class DocumentManager {
       error,
       updatedAt: new Date()
     });
+  }
+
+  /**
+   * Store content for RAG retrieval with MongoDB Atlas Vector Search
+   */
+  private async storeContentForRAG(data: {
+    documentId: string;
+    content: string;
+    title: string;
+    source: string;
+    userId: string;
+    tenantId: string;
+    accessLevel: string;
+  }): Promise<void> {
+    try {
+      console.log('🔄 storeContentForRAG called with content length:', data.content?.length || 0);
+      
+      // Validate content exists
+      if (!data.content || data.content.trim().length === 0) {
+        console.warn('⚠️ No content to store for RAG - content is empty');
+        return;
+      }
+
+      // Store content metadata in MongoDB with proper documentId linkage
+      const contentDoc = {
+        documentId: data.documentId,  // Use documentId for proper linkage
+        title: data.title,
+        content: data.content,
+        source: data.source,
+        userId: data.userId,
+        tenantId: data.tenantId,
+        accessLevel: data.accessLevel,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const contentResult = await this.mongoAccessor.create('contents', contentDoc);
+      console.log('✅ Content metadata stored in MongoDB with documentId:', data.documentId);
+
+      // Generate embeddings and store in MongoDB Atlas Vector Search
+      try {
+        console.log('🔄 Generating embeddings for MongoDB Atlas Vector Search...');
+        
+        // Import services dynamically to avoid circular dependencies
+        const { default: EmbeddingService } = await import('../services/embedding-service');
+        const { default: MongoVectorAccessor } = await import('../accessors/MongoVectorAccessor');
+        
+        const embeddingService = new EmbeddingService();
+        const mongoVectorAccessor = new MongoVectorAccessor();
+        
+        // Initialize vector search index if needed
+        await mongoVectorAccessor.initializeIndex();
+        
+        // Chunk content for better embeddings
+        const chunks = this.chunkContent(data.content, 1000);
+        console.log(`📝 Content chunked into ${chunks.length} pieces`);
+        
+        // Generate embeddings for each chunk
+        const vectorDocs = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const result = await embeddingService.generateEmbedding(chunk);
+          
+          vectorDocs.push({
+            id: `${data.documentId}_chunk_${i}`,
+            vector: result.embedding,
+            metadata: {
+              userId: data.userId,
+              tenantId: data.tenantId,
+              title: data.title,
+              source: data.source,
+              accessLevel: data.accessLevel,
+              contentType: 'text',
+              createdAt: new Date().toISOString(),
+              textChunk: chunk,
+              chunkIndex: i,
+              totalChunks: chunks.length,
+              documentId: data.documentId
+            }
+          });
+        }
+        
+        // Store vectors in MongoDB Atlas
+        await mongoVectorAccessor.storeVectors(vectorDocs);
+        console.log(`✅ ${vectorDocs.length} embeddings stored in MongoDB Atlas Vector Search`);
+        
+      } catch (error) {
+        console.error('❌ Failed to generate/store embeddings:', error);
+        // Continue without embeddings rather than failing the entire job
+      }
+      
+    } catch (error) {
+      console.error('❌ Failed to store content for RAG:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Chunk content into smaller pieces for better embeddings
+   */
+  private chunkContent(content: string, maxChunkSize: number = 1000): string[] {
+    if (!content || content.length <= maxChunkSize) {
+      return [content];
+    }
+
+    const chunks: string[] = [];
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    let currentChunk = '';
+    for (const sentence of sentences) {
+      const trimmedSentence = sentence.trim();
+      if (currentChunk.length + trimmedSentence.length + 1 <= maxChunkSize) {
+        currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
+      } else {
+        if (currentChunk) {
+          chunks.push(currentChunk + '.');
+        }
+        currentChunk = trimmedSentence;
+      }
+    }
+    
+    if (currentChunk) {
+      chunks.push(currentChunk + '.');
+    }
+    
+    return chunks.length > 0 ? chunks : [content];
   }
 
   /**

@@ -3,6 +3,7 @@ import {
   ProcessingOptions, 
   DocumentProcessingStatus, 
   ProcessingStage, 
+  ProcessingLog,
   ProcessingLogStatus,
   AccessLevel,
   ExtractionResult 
@@ -112,7 +113,6 @@ class DocumentProcessor {
       
       // Stage 1: Content Extraction
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.EXTRACTION,
         status: ProcessingLogStatus.STARTED,
         message: 'Starting content extraction'
@@ -131,10 +131,9 @@ class DocumentProcessor {
       }
 
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.EXTRACTION,
         status: ProcessingLogStatus.COMPLETED,
-        message: `Extracted ${extractionResult.content.length} characters`,
+        message: 'Content extraction completed',
         duration: extractionResult.processingTime,
         metadata: {
           method: extractionResult.extractionMethod,
@@ -197,10 +196,9 @@ class DocumentProcessor {
       });
 
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.INDEXING,
         status: ProcessingLogStatus.COMPLETED,
-        message: 'Document processing completed successfully',
+        message: 'Document stored successfully',
         duration: Date.now() - startTime
       });
 
@@ -295,6 +293,13 @@ class DocumentProcessor {
         status: DocumentProcessingStatus.COMPLETED
       });
 
+      await this.addProcessingLog(documentId, {
+        stage: ProcessingStage.INDEXING,
+        status: ProcessingLogStatus.COMPLETED,
+        message: 'Document stored successfully',
+        duration: Date.now() - startTime
+      });
+
       return {
         success: true,
         documentId,
@@ -382,7 +387,6 @@ class DocumentProcessor {
     options: ProcessingOptions
   ): Promise<void> {
     await this.addProcessingLog(documentId, {
-      timestamp: new Date(),
       stage: ProcessingStage.ANALYSIS,
       status: ProcessingLogStatus.STARTED,
       message: 'Starting AI analysis'
@@ -405,23 +409,19 @@ class DocumentProcessor {
       });
 
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.ANALYSIS,
         status: ProcessingLogStatus.COMPLETED,
         message: `AI analysis completed with ${analysis.keywords.length} keywords identified`,
         metadata: {
-          quality: analysis.quality,
-          contentType: analysis.contentType,
-          confidence: analysis.confidenceScore
+          keywordCount: analysis.keywords.length,
+          summaryLength: analysis.summary.length
         }
       });
     } catch (error) {
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
-        stage: ProcessingStage.ANALYSIS,
+        stage: ProcessingStage.INDEXING,
         status: ProcessingLogStatus.FAILED,
-        message: 'AI analysis failed',
-        errorDetails: error instanceof Error ? error.message : 'Unknown error'
+        message: `Finalization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
     }
   }
@@ -434,10 +434,9 @@ class DocumentProcessor {
     content: string
   ): Promise<void> {
     await this.addProcessingLog(documentId, {
-      timestamp: new Date(),
-      stage: ProcessingStage.VECTORIZATION,
+      stage: ProcessingStage.INDEXING,
       status: ProcessingLogStatus.STARTED,
-      message: 'Generating vector embeddings'
+      message: 'Starting finalization'
     });
 
     try {
@@ -453,7 +452,6 @@ class DocumentProcessor {
       });
 
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.VECTORIZATION,
         status: ProcessingLogStatus.COMPLETED,
         message: `Generated ${embeddings.length} vector embeddings`,
@@ -464,7 +462,6 @@ class DocumentProcessor {
       });
     } catch (error) {
       await this.addProcessingLog(documentId, {
-        timestamp: new Date(),
         stage: ProcessingStage.VECTORIZATION,
         status: ProcessingLogStatus.FAILED,
         message: 'Vector embedding generation failed',
@@ -499,7 +496,6 @@ class DocumentProcessor {
     });
 
     await this.addProcessingLog(documentId, {
-      timestamp: new Date(),
       stage: ProcessingStage.EXTRACTION,
       status: ProcessingLogStatus.FAILED,
       message,

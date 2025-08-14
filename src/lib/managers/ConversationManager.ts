@@ -8,13 +8,15 @@
 import { ConversationEngine, ConversationSession, Message, ConversationContext } from '../engines/ConversationEngine';
 import { MongoDBAccessor } from '../accessors/MongoDBAccessor';
 import { AnthropicAccessor } from '../accessors/AnthropicAccessor';
+import { MongoVectorAccessor } from '../accessors/MongoVectorAccessor';
+import EmbeddingService from '../services/embedding-service';
 
 export interface ChatRequest {
   message: string;
   userId: string;
   tenantId: string;
   sessionId?: string;
-  accessLevel: 'PUBLIC' | 'ACCOUNT' | 'COMPANY' | 'OFFICE';
+  accessLevel: string;
   context?: {
     documentIds?: string[];
     previousMessages?: number;
@@ -46,10 +48,36 @@ export interface SessionSummary {
 }
 
 export class ConversationManager {
+  private mongoVectorAccessor: MongoVectorAccessor;
+  private embeddingService: EmbeddingService;
+
   constructor(
     private mongoAccessor: MongoDBAccessor,
     private aiAccessor: AnthropicAccessor
-  ) {}
+  ) {
+    this.mongoVectorAccessor = new MongoVectorAccessor();
+    this.embeddingService = new EmbeddingService();
+    
+    // FIXED: Initialize MongoDB connection for vector search
+    this.initializeVectorSearch();
+  }
+
+  /**
+   * Initialize MongoDB Vector Search connection - FIXED: Ensure database connection
+   */
+  private async initializeVectorSearch(): Promise<void> {
+    try {
+      console.log('🔧 Initializing MongoDB Vector Search connection...');
+      
+      // FIXED: Connect to MongoDB first before initializing index
+      await this.mongoVectorAccessor.connect();
+      await this.mongoVectorAccessor.initializeIndex();
+      
+      console.log('✅ MongoDB Vector Search connection initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize MongoDB Vector Search:', error);
+    }
+  }
 
   /**
    * Process chat message with full business logic orchestration
@@ -281,6 +309,12 @@ export class ConversationManager {
       contextDocuments = await this.getDocumentContext(request.context.documentIds, request.tenantId);
     }
 
+    // RAG: Retrieve relevant processed content based on user's message
+    const relevantContent = await this.retrieveRelevantContent(request.message, request.userId, request.tenantId, request.accessLevel);
+    if (relevantContent.length > 0) {
+      contextDocuments.push(...relevantContent);
+    }
+
     // Build conversation context using engine
     return ConversationEngine.buildConversationContext(
       session.messages,
@@ -377,16 +411,116 @@ export class ConversationManager {
   }
 
   /**
-   * Get document context for RAG
+   * Get document context for RAG - FIXED: Use contents collection instead of S3-referenced documents
    */
   private async getDocumentContext(documentIds: string[], tenantId: string): Promise<string[]> {
-    const documents = await this.mongoAccessor.findDocumentsByIds(documentIds, tenantId);
+    console.log('🔍 Getting document context for RAG from contents collection (not S3)...');
     
-    return documents.map(doc => {
-      const title = doc.metadata?.title || 'Untitled Document';
-      const content = doc.content?.substring(0, 500) || 'No content available';
-      return `${title}: ${content}`;
+    // FIXED: Query contents collection instead of documents collection to avoid S3 conflicts
+    const contents = await this.mongoAccessor.find('contents', {
+      documentId: { $in: documentIds },
+      tenantId: tenantId
     });
+    
+    console.log(`📊 Found ${contents.length} content documents for RAG context`);
+    
+    return contents.map(content => {
+      const title = content.title || content.metadata?.title || 'Untitled Document';
+      const text = content.content?.substring(0, 500) || 'No content available';
+      return `${title}: ${text}`;
+    });
+  }
+
+  /**
+   * Retrieve relevant content for RAG using MongoDB Atlas Vector Search
+   */
+  private async retrieveRelevantContent(message: string, userId: string, tenantId: string, accessLevel: string): Promise<string[]> {
+    try {
+      console.log('🔍 Retrieving relevant content for message:', message.substring(0, 100));
+
+      // Try MongoDB Atlas Vector Search first
+      try {
+        console.log('🚀 Using MongoDB Atlas Vector Search for semantic search...');
+        
+        // Initialize vector search index if needed
+        await this.mongoVectorAccessor.initializeIndex();
+        
+        // Generate embedding for the user's message
+        const messageEmbedding = await this.embeddingService.generateEmbedding(message);
+        
+        // Search for similar content using vector similarity
+        const vectorResults = await this.mongoVectorAccessor.searchVectors(
+          messageEmbedding.embedding,
+          {
+            topK: 5,
+            filter: {
+              userId,
+              tenantId,
+              accessLevel: this.getAccessibleLevels(accessLevel)
+            }
+          }
+        );
+        
+        if (vectorResults.length > 0) {
+          console.log(`📊 Found ${vectorResults.length} relevant documents via MongoDB vector search`);
+          
+          // Format vector results for context
+          return vectorResults.map(result => 
+            `**${result.metadata.title}** (${result.metadata.source})\n` +
+            `Content: ${result.metadata.textChunk}\n` +
+            `Relevance Score: ${result.score.toFixed(3)}\n`
+          );
+        }
+      } catch (vectorError) {
+        console.error('❌ MongoDB vector search failed, falling back to text search:', vectorError);
+      }
+
+      // Fallback to MongoDB text search
+      console.log('🔍 Using MongoDB text search as fallback...');
+      
+      const searchCriteria = {
+        userId,
+        tenantId,
+        accessLevel: { $in: this.getAccessibleLevels(accessLevel) },
+        $text: { $search: message }
+      };
+
+      const relevantDocs = await this.mongoAccessor.find('contents', searchCriteria, {
+        limit: 5,
+        sort: { score: { $meta: 'textScore' } }
+      });
+
+      console.log(`📊 Found ${relevantDocs.length} text search matches`);
+
+      return relevantDocs.map((doc: any) => 
+        `**${doc.title}**\n` +
+        `Summary: ${doc.aiAnalysis?.summary || 'No summary available'}\n` +
+        `Key Points: ${doc.aiAnalysis?.keyPoints?.join(', ') || 'None'}\n` +
+        `Content: ${doc.content?.substring(0, 300) || 'No content'}...\n`
+      );
+
+    } catch (error) {
+      console.error('❌ Failed to retrieve relevant content:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get accessible access levels based on current access level
+   */
+  private getAccessibleLevels(accessLevel: string): string[] {
+    switch (accessLevel) {
+      case 'PUBLIC':
+        return ['PUBLIC'];
+      case 'ACCOUNT':
+        return ['PUBLIC', 'ACCOUNT'];
+      case 'COMPANY':
+        return ['PUBLIC', 'ACCOUNT', 'COMPANY'];
+      case 'OFFICE':
+        return ['PUBLIC', 'ACCOUNT', 'COMPANY', 'OFFICE'];
+      default:
+        return ['PUBLIC'];
+    }
   }
 
   /**

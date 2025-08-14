@@ -64,11 +64,11 @@ export async function POST(request: NextRequest) {
 
     const { url, userId, tenantId, accessLevel } = validationResult.data;
 
-    // Use default values for demo purposes
+    // Use default values for demo purposes (matching diagnostics dashboard)
     const documentRequest = {
       url,
-      userId: userId || 'demo-user-001',
-      tenantId: tenantId || 'demo-tenant-001',
+      userId: userId || 'demo-user',
+      tenantId: tenantId || 'demo-tenant',
       accessLevel: accessLevel || 'ACCOUNT' as const,
       metadata: {
         source: 'dashboard-url-processing',
@@ -78,7 +78,17 @@ export async function POST(request: NextRequest) {
     };
 
     // Process document using VBD DocumentManager
+    console.log('🚀 Starting document processing for:', documentRequest);
     const result = await documentManager.processDocument(documentRequest);
+    console.log('✅ Document processing result:', result);
+
+    // Verify job was stored
+    try {
+      const storedJob = await mongoAccessor.find('processing_jobs', { jobId: result.jobId });
+      console.log('🔍 Stored job verification:', storedJob);
+    } catch (error) {
+      console.error('❌ Failed to verify stored job:', error);
+    }
 
     return NextResponse.json({
       success: true,
@@ -86,7 +96,12 @@ export async function POST(request: NextRequest) {
       status: result.status,
       progress: result.progress,
       message: 'Document processing started successfully',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      debug: {
+        userId: documentRequest.userId,
+        tenantId: documentRequest.tenantId,
+        url: documentRequest.url
+      }
     });
 
   } catch (error) {

@@ -380,6 +380,7 @@ Remember to be concise but thorough, and always prioritize accuracy over complet
         content: userMessage,
         conversationId: context.conversationId,
         sources: [],
+        timestamp: new Date(),
         metadata: {
           accessLevel: context.accessLevel,
           accessId: context.accessId
@@ -393,6 +394,7 @@ Remember to be concise but thorough, and always prioritize accuracy over complet
         conversationId: context.conversationId,
         confidence: response.confidence,
         sources: context.relevantDocuments || [],
+        timestamp: new Date(),
         metadata: {
           accessLevel: context.accessLevel,
           accessId: context.accessId

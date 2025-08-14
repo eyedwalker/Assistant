@@ -1,4 +1,4 @@
-import { MongoClient, Db, Collection } from 'mongodb';
+import { MongoClient, Db, Collection, Document as MongoDocument } from 'mongodb';
 import { 
   DocumentMetadata, 
   ProcessingLog, 
@@ -97,7 +97,7 @@ class MongoDBService {
     }
   }
 
-  private getCollection<T = any>(name: string): Collection<T> {
+  private getCollection<T extends MongoDocument = MongoDocument>(name: string): Collection<T> {
     if (!this.db) {
       throw new Error('Database not connected');
     }

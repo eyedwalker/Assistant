@@ -146,12 +146,10 @@ export class WebCrawlingManager {
       let learningObjectives: string[] = [];
       
       if (consolidatedText.length > 100) {
-        aiAnalysis = await this.anthropicAccessor.generateChatResponse([
-          {
-            role: 'user',
-            content: `Analyze this website content and provide a comprehensive summary focusing on educational value, key topics, and relevance to eyecare/medical training:\n\n${consolidatedText.substring(0, 4000)}`
-          }
-        ]);
+        const response = await this.anthropicAccessor.generateChatResponse(
+          `Analyze this website content and provide a comprehensive summary focusing on educational value, key topics, and relevance to eyecare/medical training:\n\n${consolidatedText.substring(0, 4000)}`
+        );
+        aiAnalysis = response.message;
 
         categories = await this.extractCategories(consolidatedText);
         tags = await this.extractTags(consolidatedText);
@@ -396,7 +394,7 @@ export class WebCrawlingManager {
         throw new Error(`Domain not allowed for crawling: ${domain}`);
       }
     } catch (error) {
-      if (error.message.includes('Domain not allowed')) {
+      if (error instanceof Error && error.message.includes('Domain not allowed')) {
         throw error;
       }
       throw new Error(`Invalid URL: ${url}`);
@@ -451,11 +449,9 @@ export class WebCrawlingManager {
 
     try {
       const prompt = `Extract 8-12 relevant tags from this web content. Focus on medical, eyecare, educational, and technical topics. Return as comma-separated list:\n\n${content.substring(0, 3000)}`;
-      const response = await this.anthropicAccessor.generateChatResponse([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await this.anthropicAccessor.generateChatResponse(prompt);
       
-      return response.split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean);
+      return response.message.split(',').map((tag: string) => tag.trim().toLowerCase()).filter(Boolean);
     } catch (error) {
       console.error('Error extracting tags:', error);
       return [];
@@ -470,13 +466,11 @@ export class WebCrawlingManager {
 
     try {
       const prompt = `Extract 3-6 learning objectives from this web content. Focus on what users will learn or understand. Format as bullet points:\n\n${content.substring(0, 3000)}`;
-      const response = await this.anthropicAccessor.generateChatResponse([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await this.anthropicAccessor.generateChatResponse(prompt);
       
-      return response.split('\n')
-        .filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
-        .map(line => line.replace(/^[-•]\s*/, '').trim())
+      return response.message.split('\n')
+        .filter((line: string) => line.trim().startsWith('-') || line.trim().startsWith('•'))
+        .map((line: string) => line.replace(/^[-•]\s*/, '').trim())
         .filter(Boolean);
     } catch (error) {
       console.error('Error extracting learning objectives:', error);

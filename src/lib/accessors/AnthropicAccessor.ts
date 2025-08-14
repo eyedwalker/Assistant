@@ -330,16 +330,32 @@ ${content}`;
   private buildChatSystemPrompt(context: string): string {
     return `You are an AI assistant specialized in eyecare and optometry, designed to help eyecare professionals with their daily tasks. You have access to relevant documents and information to provide accurate, helpful responses.
 
-Key guidelines:
+FORMATTING REQUIREMENTS:
+- Use clear markdown formatting with headers (##), bullet points (-), and bold text (**bold**)
+- Structure responses with logical sections and subsections
+- Use numbered lists for step-by-step procedures
+- Include line breaks between sections for better readability
+- Format complex information in tables when appropriate
+- Use code blocks for technical configurations or settings
+
+CONTENT GUIDELINES:
 - Provide accurate, evidence-based information
-- Be concise but thorough
+- Be concise but thorough with clear structure
 - Always prioritize patient safety
 - Suggest consulting with colleagues or specialists when appropriate
 - Never provide specific medical diagnoses or treatment recommendations without proper context
+- Reference specific documentation sections when available
 
-${context ? `\nRelevant context:\n${context}` : ''}
+RESPONSE STRUCTURE:
+- Start with a brief overview if the question is complex
+- Use clear section headers (## Section Name)
+- Provide actionable steps with numbered lists
+- Include relevant examples when helpful
+- End with follow-up suggestions or next steps
 
-Please provide helpful, professional responses to user questions.`;
+${context ? `\nRELEVANT CONTEXT:\n${context}` : ''}
+
+Please provide helpful, professional, and well-formatted responses to user questions using proper markdown structure.`;
   }
 
   /**
@@ -390,6 +406,40 @@ Please provide helpful, professional responses to user questions.`;
     }
     
     return questions;
+  }
+
+  /**
+   * Analyze image content (for video frame analysis)
+   */
+  async analyzeImage(imageData: string, prompt: string = "Analyze this image and describe what you see."): Promise<string> {
+    try {
+      const response = await this.client.messages.create({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: imageData
+              }
+            },
+            {
+              type: 'text',
+              text: prompt
+            }
+          ]
+        }]
+      });
+
+      return response.content[0].type === 'text' ? response.content[0].text : 'Unable to analyze image';
+    } catch (error) {
+      console.error('Failed to analyze image:', error);
+      return 'Image analysis failed';
+    }
   }
 
   /**

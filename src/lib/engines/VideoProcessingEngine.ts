@@ -69,8 +69,8 @@ export class VideoProcessingEngine {
         throw new Error(`Unsupported video source: ${url}`);
       }
     } catch (error) {
-      console.error('Video download failed:', error);
-      throw new Error(`Failed to download video: ${error.message}`);
+      console.error('Video processing failed:', error);
+      throw new Error(`Video processing failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -95,8 +95,8 @@ export class VideoProcessingEngine {
         description: metadata.format?.tags?.description
       };
     } catch (error) {
-      console.error('Metadata extraction failed:', error);
-      throw new Error(`Failed to extract video metadata: ${error.message}`);
+      console.error('Failed to extract video metadata:', error);
+      throw new Error(`Video metadata extraction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -120,7 +120,7 @@ export class VideoProcessingEngine {
       return audioPath;
     } catch (error) {
       console.error('Audio extraction failed:', error);
-      throw new Error(`Failed to extract audio: ${error.message}`);
+      throw new Error(`Failed to extract audio: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -192,7 +192,7 @@ export class VideoProcessingEngine {
       return keyFrames;
     } catch (error) {
       console.error('Key frame extraction failed:', error);
-      throw new Error(`Failed to extract key frames: ${error.message}`);
+      throw new Error(`Failed to extract key frames: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -313,7 +313,7 @@ export class VideoProcessingEngine {
 
       return outputPath;
     } catch (error) {
-      throw new Error(`YouTube download failed: ${error.message}`);
+      throw new Error(`YouTube download failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -334,7 +334,7 @@ export class VideoProcessingEngine {
 
       return outputPath;
     } catch (error) {
-      throw new Error(`Direct download failed: ${error.message}`);
+      throw new Error(`Direct download failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -364,7 +364,7 @@ export class VideoProcessingEngine {
           try {
             resolve(JSON.parse(output));
           } catch (parseError) {
-            reject(new Error(`Failed to parse ffprobe output: ${parseError.message}`));
+            reject(new Error(`Failed to parse ffprobe output: ${parseError instanceof Error ? parseError.message : String(parseError)}`));
           }
         } else {
           reject(new Error(`ffprobe failed with code ${code}: ${error}`));

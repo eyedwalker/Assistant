@@ -198,12 +198,15 @@ export interface CrawledPage {
 }
 
 export interface LinkedResource {
+  id?: string;
   type: 'image' | 'video' | 'audio' | 'document' | 'link';
   url: string;
   title?: string;
   description?: string;
   size?: number;
   processed: boolean;
+  content?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface DetectedObject {

@@ -532,4 +532,197 @@ export class MongoDBAccessor {
       })
       .toArray();
   }
+
+  // AUDIT AND SECURITY OPERATIONS
+
+  /**
+   * Create audit log entry for security and compliance tracking
+   */
+  async createAuditLog(auditRecord: any): Promise<{ id: string }> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection('audit_logs');
+    const record = {
+      ...auditRecord,
+      _id: new ObjectId(),
+      createdAt: new Date()
+    };
+    
+    const result = await collection.insertOne(record);
+    return { id: result.insertedId.toString() };
+  }
+
+  /**
+   * Find audit logs by criteria
+   */
+  async findAuditLogs(
+    tenantId: string,
+    filters: {
+      userId?: string;
+      action?: string;
+      startDate?: Date;
+      endDate?: Date;
+      riskLevel?: string;
+    } = {},
+    limit: number = 100
+  ): Promise<any[]> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection('audit_logs');
+    const query: any = { tenantId };
+    
+    if (filters.userId) query.userId = filters.userId;
+    if (filters.action) query.action = filters.action;
+    if (filters.riskLevel) query.riskLevel = filters.riskLevel;
+    
+    if (filters.startDate || filters.endDate) {
+      query.createdAt = {};
+      if (filters.startDate) query.createdAt.$gte = filters.startDate;
+      if (filters.endDate) query.createdAt.$lte = filters.endDate;
+    }
+    
+    return await collection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  /**
+   * Get security statistics for compliance reporting
+   */
+  async getSecurityStats(tenantId: string, days: number = 30): Promise<any> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection('audit_logs');
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const pipeline = [
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startDate },
+          action: { $in: ['SECURITY_SCAN', 'SECURITY_ERROR'] }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            result: '$result',
+            riskLevel: '$riskLevel'
+          },
+          count: { $sum: 1 },
+          avgViolations: { $avg: '$violationCount' }
+        }
+      },
+      {
+        $sort: { '_id.riskLevel': -1, count: -1 }
+      }
+    ];
+
+    return await collection.aggregate(pipeline).toArray();
+  }
+
+  // GENERIC CRUD OPERATIONS - VBD Accessor Layer
+  // These methods provide generic database operations while maintaining clean separation
+
+  /**
+   * Generic create operation for any collection
+   */
+  async create<T>(collectionName: string, document: Omit<T, '_id'>): Promise<string> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    const result = await collection.insertOne(document as any);
+    return result.insertedId.toString();
+  }
+
+  /**
+   * Generic findById operation for any collection
+   */
+  async findById<T = any>(collectionName: string, id: string): Promise<T | null> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    return await collection.findOne({ _id: new ObjectId(id) }) as T | null;
+  }
+
+  /**
+   * Generic find operation for any collection
+   */
+  async find<T = any>(collectionName: string, filter: any = {}, options: {
+    sort?: any;
+    skip?: number;
+    limit?: number;
+  } = {}): Promise<T[]> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    let query = collection.find(filter);
+    
+    if (options.sort) query = query.sort(options.sort);
+    if (options.skip) query = query.skip(options.skip);
+    if (options.limit) query = query.limit(options.limit);
+    
+    return await query.toArray() as T[];
+  }
+
+  /**
+   * Generic update operation for any collection
+   */
+  async update<T = any>(collectionName: string, id: string, updates: Partial<T>): Promise<T | null> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { ...updates, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    
+    return result.value as T | null;
+  }
+
+  /**
+   * Generic delete operation for any collection
+   */
+  async delete(collectionName: string, id: string): Promise<boolean> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
+  /**
+   * Generic deleteMany operation for any collection
+   */
+  async deleteMany(collectionName: string, filter: any): Promise<number> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    const result = await collection.deleteMany(filter);
+    return result.deletedCount;
+  }
+
+  /**
+   * Generic count operation for any collection
+   */
+  async count(collectionName: string, filter: any = {}): Promise<number> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    return await collection.countDocuments(filter);
+  }
+
+  /**
+   * Generic aggregate operation for any collection
+   */
+  async aggregate<T = any>(collectionName: string, pipeline: any[]): Promise<T[]> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    return await collection.aggregate(pipeline).toArray() as T[];
+  }
 }

@@ -19,7 +19,7 @@ interface AnalysisOptions {
 
 class AIAnalysisService {
   private anthropic: Anthropic;
-  private openai: OpenAI;
+  private openai?: OpenAI;
 
   constructor() {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -460,10 +460,14 @@ Respond with JSON only:
     openai: boolean;
     status: 'healthy' | 'degraded' | 'down';
   }> {
-    const results = {
+    const results: {
+      anthropic: boolean;
+      openai: boolean;
+      status: 'healthy' | 'degraded' | 'down';
+    } = {
       anthropic: false,
       openai: false,
-      status: 'down' as const
+      status: 'down'
     };
 
     try {

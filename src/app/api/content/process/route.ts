@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ContentDetectionEngine } from '@/lib/engines/ContentDetectionEngine';
 import { DocumentManager } from '@/lib/managers/DocumentManager';
+import { SecurityManager } from '@/lib/managers/SecurityManager';
 import { MongoDBAccessor } from '@/lib/accessors/MongoDBAccessor';
 import { S3Accessor } from '@/lib/accessors/S3Accessor';
 import { AnthropicAccessor } from '@/lib/accessors/AnthropicAccessor';
@@ -26,6 +27,7 @@ const s3Accessor = new S3Accessor(
 );
 const anthropicAccessor = new AnthropicAccessor();
 const documentManager = new DocumentManager(mongoAccessor, s3Accessor, anthropicAccessor);
+const securityManager = new SecurityManager(mongoAccessor);
 const contentDetectionEngine = new ContentDetectionEngine();
 
 // Initialize MongoDB connection
@@ -90,7 +92,71 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Step 4: Estimate processing
+    // Step 4: SECURITY VALIDATION - HIPAA/PII/PHI Compliance Check
+    // Pre-fetch content for security scanning
+    let contentPreview = '';
+    try {
+      const response = await fetch(url, { 
+        method: 'GET',
+        headers: { 'User-Agent': 'AI-Assistant-Security-Scanner/1.0' },
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+      if (response.ok) {
+        const text = await response.text();
+        // Get first 5000 characters for security scanning
+        contentPreview = text.substring(0, 5000);
+      }
+    } catch (error) {
+      console.warn('Could not fetch content for security scan:', error);
+      // Continue with processing but log the warning
+    }
+
+    // Map content type for security validation
+    const mapContentType = (type: string): 'document' | 'video' | 'web' | 'image' | 'audio' | 'text' => {
+      switch (type) {
+        case 'presentation':
+        case 'document': return 'document';
+        case 'video': return 'video';
+        case 'web': return 'web';
+        case 'image': return 'image';
+        case 'audio': return 'audio';
+        default: return 'text';
+      }
+    };
+
+    // Perform security validation
+    const securityValidation = await securityManager.validateContent({
+      content: contentPreview,
+      contentType: mapContentType(detectedType),
+      userId,
+      tenantId,
+      accessLevel: 'COMPANY', // Default to strict compliance for eyecare
+      source: 'url',
+      metadata: {
+        url,
+        size: contentPreview.length,
+        mimeType: 'text/html'
+      }
+    });
+
+    // Block content if security violations detected
+    if (!securityValidation.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: 'Content blocked due to security policy violations',
+        securityViolation: true,
+        blockReason: securityValidation.blockReason,
+        complianceStatus: securityValidation.complianceStatus,
+        auditId: securityValidation.auditId,
+        riskLevel: securityValidation.scanResult.riskLevel,
+        violationCount: securityValidation.scanResult.violations.length
+      }, { status: 403 });
+    }
+
+    // Log security approval
+    console.log(`[SECURITY APPROVED] Content processing authorized - Audit ID: ${securityValidation.auditId}`);
+
+    // Step 5: Estimate processing
     const estimation = contentDetectionEngine.estimateProcessing(detectedType, config);
 
     // Step 5: Route to appropriate processor

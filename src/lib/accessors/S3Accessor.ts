@@ -183,6 +183,13 @@ export class S3Accessor {
   }
 
   /**
+   * Delete file from S3 (alias for deleteObject for compatibility)
+   */
+  async deleteFile(key: string): Promise<boolean> {
+    return await this.deleteObject(key);
+  }
+
+  /**
    * Check if object exists
    */
   async objectExists(key: string): Promise<boolean> {

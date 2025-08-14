@@ -12,6 +12,7 @@ import {
   PlusIcon,
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
+import SimpleProcessingStatus from '@/components/SimpleProcessingStatus';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -23,6 +24,7 @@ interface ChatMessage {
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [documents, setDocuments] = useState<any[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -45,9 +47,40 @@ export default function HomePage() {
     { id: 'documents', name: 'Documents', icon: DocumentTextIcon },
     { id: 'chat', name: 'Chat', icon: ChatBubbleLeftRightIcon },
     { id: 'upload', name: 'Upload', icon: CloudArrowUpIcon },
+    { id: 'processing', name: 'Processing Status', icon: ChartBarIcon },
     { id: 'users', name: 'Users', icon: UsersIcon },
     { id: 'settings', name: 'Settings', icon: CogIcon },
   ];
+
+  // Fetch processed documents
+  const fetchDocuments = async () => {
+    setIsLoadingDocuments(true);
+    try {
+      const response = await fetch('/api/processing/diagnostics');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.diagnostics) {
+          // Combine documents and processedContent for display
+          const allDocuments = [
+            ...(data.diagnostics.documents || []),
+            ...(data.diagnostics.processedContent || [])
+          ];
+          setDocuments(allDocuments);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
+
+  // Load documents when Documents tab is selected
+  React.useEffect(() => {
+    if (activeTab === 'documents') {
+      fetchDocuments();
+    }
+  }, [activeTab]);
 
   // Handle URL processing
   const handleProcessUrl = async () => {
@@ -301,11 +334,96 @@ export default function HomePage() {
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Document Management</h2>
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <p className="text-gray-600 mb-4">View and manage your processed documents.</p>
-              <div className="text-center py-8">
-                <DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No documents processed yet. Try uploading or processing a URL!</p>
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-gray-600">View and manage your processed documents.</p>
+                <button
+                  onClick={fetchDocuments}
+                  disabled={isLoadingDocuments}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isLoadingDocuments ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MagnifyingGlassIcon className="h-4 w-4" />
+                      <span>Refresh</span>
+                    </>
+                  )}
+                </button>
               </div>
+
+              {isLoadingDocuments ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Loading documents...</p>
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="text-center py-8">
+                  <DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No documents processed yet. Try uploading or processing a URL!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {documents.map((doc, index) => (
+                    <div key={doc.id || index} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-lg font-medium text-gray-900">
+                          {doc.title || doc.name || 'Untitled Document'}
+                        </h3>
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          doc.hasEmbeddings ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {doc.hasEmbeddings ? 'RAG-Ready' : 'Processing'}
+                        </span>
+                      </div>
+                      
+                      {doc.source && (
+                        <p className="text-sm text-blue-600 mb-2">
+                          <a href={doc.source} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                            {doc.source}
+                          </a>
+                        </p>
+                      )}
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-2">
+                        <div>
+                          <span className="font-medium">Text Length:</span> {doc.extractedTextLength || 0} chars
+                        </div>
+                        <div>
+                          <span className="font-medium">Embeddings:</span> {doc.embeddingCount || 0}
+                        </div>
+                        <div>
+                          <span className="font-medium">Access Level:</span> {doc.accessLevel || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Created:</span> {
+                            new Date(doc.createdAt).toLocaleDateString() || 'N/A'
+                          }
+                        </div>
+                      </div>
+                      
+                      {doc.contentPreview?.extractedText && doc.contentPreview.extractedText !== 'undefined...' && (
+                        <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Preview:</span> {doc.contentPreview.extractedText}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {doc.aiAnalysis?.summary && doc.aiAnalysis.summary !== 'Analysis failed...' && (
+                        <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                          <p className="text-sm text-blue-700">
+                            <span className="font-medium">AI Summary:</span> {doc.aiAnalysis.summary}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -415,6 +533,11 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Processing Status Tab */}
+        {activeTab === 'processing' && (
+          <SimpleProcessingStatus />
         )}
 
         {/* Users Tab */}

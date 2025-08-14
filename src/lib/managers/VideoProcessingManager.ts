@@ -174,14 +174,14 @@ export class VideoProcessingManager {
 
       // Step 7: Store video file in S3
       await this.updateProcessingStatus(jobId, 'processing', 90);
-      const s3Key = `videos/${contentId}/${path.basename(videoPath)}`;
-      await this.s3Accessor.uploadFile(videoPath, s3Key);
+      const s3Key = `videos/${contentId}/${videoPath.split('/').pop()}`;
+      await this.s3Accessor.uploadContent(videoPath, s3Key, 'video/mp4');
 
       // Step 8: Store key frames in S3
       for (const frame of keyFrames) {
         const frameKey = `videos/${contentId}/frames/frame_${frame.timestamp}.jpg`;
-        await this.s3Accessor.uploadFile(frame.localPath, frameKey);
-        frame.imageUrl = await this.s3Accessor.getSignedUrl(frameKey);
+        await this.s3Accessor.uploadContent(frame.localPath, frameKey, 'image/jpeg');
+        frame.imageUrl = await this.s3Accessor.getPresignedUrl(frameKey);
       }
 
       // Step 9: Analyze content for PHI/PII
@@ -429,11 +429,9 @@ export class VideoProcessingManager {
     // Use AI to extract relevant tags
     try {
       const prompt = `Extract 5-10 relevant tags from this video content. Focus on medical, eyecare, and educational topics. Return as comma-separated list:\n\n${content.substring(0, 2000)}`;
-      const response = await this.anthropicAccessor.generateChatResponse([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await this.anthropicAccessor.generateChatResponse(prompt);
       
-      return response.split(',').map(tag => tag.trim().toLowerCase()).filter(Boolean);
+      return response.message.split(',').map((tag: string) => tag.trim().toLowerCase()).filter(Boolean);
     } catch (error) {
       console.error('Error extracting tags:', error);
       return [];
@@ -467,13 +465,11 @@ export class VideoProcessingManager {
 
     try {
       const prompt = `Extract 3-5 learning objectives from this video transcription. Focus on what viewers will learn. Format as bullet points:\n\n${transcription.substring(0, 2000)}`;
-      const response = await this.anthropicAccessor.generateChatResponse([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await this.anthropicAccessor.generateChatResponse(prompt);
       
-      return response.split('\n')
-        .filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'))
-        .map(line => line.replace(/^[-•]\s*/, '').trim())
+      return response.message.split('\n')
+        .filter((line: string) => line.trim().startsWith('-') || line.trim().startsWith('•'))
+        .map((line: string) => line.replace(/^[-•]\s*/, '').trim())
         .filter(Boolean);
     } catch (error) {
       console.error('Error extracting learning objectives:', error);

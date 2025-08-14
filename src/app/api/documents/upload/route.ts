@@ -48,15 +48,19 @@ export async function POST(request: NextRequest) {
       options = JSON.parse(optionsStr || '{}');
       
       // Set defaults
-      options = {
+      const defaultOptions = {
         enableJavaScript: false,
         crawlDepth: 1,
         enableScreenshots: false,
         enableAIAnalysis: true,
-        enableContentMonitoring: false,
+        enableContentMonitoring: false
+      };
+      
+      options = {
+        ...defaultOptions,
+        ...options,
         accessLevel: options.accessLevel || session.user.accessLevel,
-        accessId: options.accessId || session.user.accessId,
-        ...options
+        accessId: options.accessId || session.user.accessId
       };
     } catch (error) {
       return NextResponse.json(

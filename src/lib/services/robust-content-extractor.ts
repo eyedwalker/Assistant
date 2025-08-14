@@ -323,16 +323,15 @@ class RobustContentExtractor {
         throw new Error('Browser not initialized');
       }
 
-      page = await this.browser.newPage();
+      // Create page with user agent in context
+      const context = await this.browser.newContext({
+        userAgent: options.userAgent || this.defaultUserAgent,
+        viewport: { width: 1920, height: 1080 },
+        ignoreHTTPSErrors: true,
+        extraHTTPHeaders: options.customHeaders || {}
+      });
       
-      // Set user agent and viewport
-      await page.setUserAgent(options.userAgent || this.defaultUserAgent);
-      await page.setViewportSize({ width: 1920, height: 1080 });
-
-      // Set extra headers if provided
-      if (options.customHeaders) {
-        await page.setExtraHTTPHeaders(options.customHeaders);
-      }
+      page = await context.newPage();
 
       // Navigate to page with timeout
       await page.goto(url, {
@@ -348,19 +347,53 @@ class RobustContentExtractor {
         await page.waitForLoadState('networkidle', { timeout: 10000 });
       }
 
-      // Extract content
+      // Extract content with enhanced debugging and selectors
       const content = await page.evaluate(() => {
+        console.log('🔍 Starting content extraction in browser...');
+        
         // Remove script and style elements
         const scripts = document.querySelectorAll('script, style, nav, header, footer, aside');
+        console.log('🗑️ Removing', scripts.length, 'script/style elements');
         scripts.forEach(el => el.remove());
         
-        // Get main content
-        const main = document.querySelector('main, article, .content, #content, .main');
-        if (main) {
-          return main.textContent?.trim() || '';
+        // Try multiple content selectors for better extraction
+        const contentSelectors = [
+          'main',
+          'article', 
+          '.content',
+          '#content',
+          '.main',
+          '.main-content',
+          '.page-content',
+          '.document-content',
+          '[role="main"]',
+          '.container .content',
+          'body .content'
+        ];
+        
+        let extractedContent = '';
+        
+        for (const selector of contentSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            const text = element.textContent?.trim() || '';
+            console.log(`✅ Found content with selector "${selector}": ${text.length} characters`);
+            if (text.length > extractedContent.length) {
+              extractedContent = text;
+            }
+          }
         }
         
-        return document.body.textContent?.trim() || '';
+        // If no specific content area found, try body but filter out common noise
+        if (extractedContent.length < 100) {
+          console.log('⚠️ No main content found, extracting from body...');
+          const bodyText = document.body.textContent?.trim() || '';
+          console.log('📄 Body text length:', bodyText.length);
+          extractedContent = bodyText;
+        }
+        
+        console.log('✅ Final extracted content length:', extractedContent.length);
+        return extractedContent;
       });
 
       const title = await page.title();
