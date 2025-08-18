@@ -213,7 +213,8 @@ export class ConversationManager {
    * Business rule: Validate user access permissions for chat
    */
   private async validateChatAccess(request: ChatRequest): Promise<void> {
-    let user = await this.mongoAccessor.findUser(request.userId);
+    const users = await this.mongoAccessor.find('users', { userId: request.userId });
+    let user = users[0];
     
     // Auto-create demo users if they don't exist
     if (!user && request.userId.startsWith('demo-')) {
@@ -229,13 +230,14 @@ export class ConversationManager {
       };
       
       try {
-        await this.mongoAccessor.createUser(demoUser);
+        await this.mongoAccessor.create('users', demoUser);
         user = demoUser;
         console.log(`Auto-created demo user for chat: ${request.userId}`);
       } catch (error) {
         console.error('Failed to create demo user for chat:', error);
         // Try to find the user again in case it was created by another request
-        user = await this.mongoAccessor.findUser(request.userId);
+        const foundUsers = await this.mongoAccessor.find('users', { userId: request.userId });
+        user = foundUsers[0];
       }
     }
     
@@ -252,12 +254,21 @@ export class ConversationManager {
       throw new Error('Insufficient permissions for chat access');
     }
 
-    // Business rule: Check tenant chat limits
-    const tenantLimits = await this.mongoAccessor.getTenantLimits(request.tenantId);
-    const currentUsage = await this.mongoAccessor.getTenantUsage(request.tenantId);
-
-    if (currentUsage.chatMessagesThisMonth >= tenantLimits.maxChatMessages) {
-      throw new Error('Tenant chat message limit exceeded');
+    // Business rule: Check tenant chat limits (simplified for demo)
+    // TODO: Implement proper tenant limits tracking
+    const tenantDocs = await this.mongoAccessor.find('tenants', { tenantId: request.tenantId });
+    const tenant = tenantDocs[0];
+    
+    // For now, skip limit checking for demo purposes
+    if (tenant && tenant.maxChatMessages) {
+      const sessionsThisMonth = await this.mongoAccessor.count('conversation_sessions', {
+        tenantId: request.tenantId,
+        createdAt: { $gte: new Date(new Date().setDate(1)) }
+      });
+      
+      if (sessionsThisMonth >= tenant.maxChatMessages) {
+        throw new Error('Tenant chat message limit exceeded');
+      }
     }
   }
 

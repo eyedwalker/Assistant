@@ -2,13 +2,77 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  RefreshCcwIcon as RefreshCw, 
+  ArrowPathIcon as RefreshCw, 
   DocumentTextIcon as FileText, 
   ClockIcon as Clock, 
   CheckCircleIcon as CheckCircle, 
   XCircleIcon as XCircle, 
   ExclamationTriangleIcon as AlertTriangle 
 } from '@heroicons/react/24/outline';
+
+// UI Components (using Tailwind classes since no UI library is installed)
+const Card = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <div className={`bg-white rounded-lg border border-gray-200 shadow-sm ${className}`}>{children}</div>
+);
+
+const CardHeader = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <div className={`px-6 py-4 border-b border-gray-200 ${className}`}>{children}</div>
+);
+
+const CardTitle = ({ children }: { children: React.ReactNode }) => (
+  <h3 className="text-lg font-semibold text-gray-900">{children}</h3>
+);
+
+const CardContent = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <div className={`px-6 py-4 ${className}`}>{children}</div>
+);
+
+const Button = ({ children, onClick, variant = 'primary', size = 'sm', className = '' }: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: 'primary' | 'secondary' | 'outline';
+  size?: 'sm' | 'md';
+  className?: string;
+}) => {
+  const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  const variantClasses = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
+    outline: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-gray-500'
+  }[variant];
+  const sizeClasses = size === 'sm' ? 'px-3 py-1.5 text-sm' : 'px-4 py-2 text-base';
+  
+  return (
+    <button 
+      onClick={onClick} 
+      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Badge = ({ children, variant = 'default', className = '' }: {
+  children: React.ReactNode;
+  variant?: 'default' | 'success' | 'warning' | 'error' | 'secondary' | 'outline' | 'destructive';
+  className?: string;
+}) => {
+  const variantClasses = {
+    default: 'bg-gray-100 text-gray-800',
+    success: 'bg-green-100 text-green-800',
+    warning: 'bg-yellow-100 text-yellow-800',
+    error: 'bg-red-100 text-red-800',
+    secondary: 'bg-gray-200 text-gray-700',
+    outline: 'border border-gray-300 bg-white text-gray-700',
+    destructive: 'bg-red-100 text-red-800'
+  };
+  
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variantClasses[variant]} ${className}`}>
+      {children}
+    </span>
+  );
+};
 
 interface ProcessingJob {
   id: string;

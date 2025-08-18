@@ -44,15 +44,16 @@ export async function GET(request: NextRequest) {
     
     // Test 3: Check all collections
     const collections = ['processing_jobs', 'contents', 'processing_logs', 'documents'];
-    const collectionStats = {};
+    const collectionStats: Record<string, number | string> = {};
     
     for (const collection of collections) {
       try {
         const count = await mongoAccessor.count(collection, {});
         collectionStats[collection] = count;
         console.log(`📊 Collection ${collection}: ${count} documents`);
-      } catch (error) {
-        collectionStats[collection] = `Error: ${error.message}`;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        collectionStats[collection] = `Error: ${errorMessage}`;
         console.error(`❌ Error checking ${collection}:`, error);
       }
     }

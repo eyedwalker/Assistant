@@ -136,7 +136,8 @@ export class DocumentManager {
    * Business rule: Validate user access permissions
    */
   private async validateAccess(request: DocumentProcessingRequest): Promise<void> {
-    let user = await this.mongoAccessor.findUser(request.userId);
+    const users = await this.mongoAccessor.find('users', { userId: request.userId });
+    let user = users[0];
     
     // Auto-create demo users if they don't exist
     if (!user && request.userId.startsWith('demo-')) {
@@ -152,13 +153,14 @@ export class DocumentManager {
       };
       
       try {
-        await this.mongoAccessor.createUser(demoUser);
+        await this.mongoAccessor.create('users', demoUser);
         user = demoUser;
         console.log(`Auto-created demo user: ${request.userId}`);
       } catch (error) {
         console.error('Failed to create demo user:', error);
         // Try to find the user again in case it was created by another request
-        user = await this.mongoAccessor.findUser(request.userId);
+        const foundUsers = await this.mongoAccessor.find('users', { userId: request.userId });
+        user = foundUsers[0];
       }
     }
     
@@ -406,7 +408,16 @@ export class DocumentManager {
       updatedAt: new Date()
     });
 
-    return updatedJob;
+    // Convert ProcessingJob to DocumentProcessingJob
+    return {
+      jobId: updatedJob.jobId,
+      status: updatedJob.status as 'pending' | 'processing' | 'completed' | 'failed',
+      progress: updatedJob.progress || 100,
+      result: updatedJob.result,
+      error: updatedJob.error,
+      createdAt: updatedJob.createdAt,
+      updatedAt: updatedJob.updatedAt
+    };
   }
 
   /**

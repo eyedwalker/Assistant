@@ -34,11 +34,11 @@ const securityValidationSchema = z.object({
 });
 
 // Initialize services
-const mongoAccessor = new MongoDBAccessor();
+const mongoAccessor = new MongoDBAccessor(
+  process.env.MONGODB_URI || 'mongodb://localhost:27017',
+  process.env.MONGODB_DB || 'eyecare-ai'
+);
 const securityManager = new SecurityManager(mongoAccessor);
-
-// Initialize MongoDB connection
-mongoAccessor.connect().catch(console.error);
 
 export async function POST(request: NextRequest) {
   try {

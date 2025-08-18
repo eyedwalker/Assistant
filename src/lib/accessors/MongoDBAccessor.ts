@@ -631,9 +631,11 @@ export class MongoDBAccessor {
    * Generic create operation for any collection
    */
   async create<T>(collectionName: string, document: Omit<T, '_id'>): Promise<string> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db) {
+      await this.connect();
+    }
     
-    const collection = this.db.collection(collectionName);
+    const collection = this.db!.collection(collectionName);
     const result = await collection.insertOne(document as any);
     return result.insertedId.toString();
   }
@@ -656,16 +658,36 @@ export class MongoDBAccessor {
     skip?: number;
     limit?: number;
   } = {}): Promise<T[]> {
-    if (!this.db) throw new Error('Database not connected');
-    
-    const collection = this.db.collection(collectionName);
-    let query = collection.find(filter);
-    
-    if (options.sort) query = query.sort(options.sort);
-    if (options.skip) query = query.skip(options.skip);
-    if (options.limit) query = query.limit(options.limit);
-    
-    return await query.toArray() as T[];
+    if (!this.db) {
+      await this.connect();
+    }
+
+    const collection = this.db!.collection(collectionName);
+    const cursor = collection.find(filter);
+
+    if (options.sort) {
+      cursor.sort(options.sort);
+    }
+    if (options.skip) {
+      cursor.skip(options.skip);
+    }
+    if (options.limit) {
+      cursor.limit(options.limit);
+    }
+
+    return await cursor.toArray() as T[];
+  }
+
+  /**
+   * Generic findOne operation for any collection
+   */
+  async findOne<T = any>(collectionName: string, filter: any = {}): Promise<T | null> {
+    if (!this.db) {
+      await this.connect();
+    }
+
+    const collection = this.db!.collection(collectionName);
+    return await collection.findOne(filter) as T | null;
   }
 
   /**

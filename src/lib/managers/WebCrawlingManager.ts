@@ -13,7 +13,7 @@ import { WebContent, ProcessingConfig, ProcessingJob, ProcessingStatus, ContentS
 import { MongoDBAccessor } from '@/lib/accessors/MongoDBAccessor';
 import { S3Accessor } from '@/lib/accessors/S3Accessor';
 import { AnthropicAccessor } from '@/lib/accessors/AnthropicAccessor';
-import { WebCrawlingEngine } from '@/lib/engines/WebCrawlingEngine';
+import { WebCrawlingEngine, AuthConfig } from '@/lib/engines/WebCrawlingEngine';
 import * as crypto from 'crypto';
 
 export class WebCrawlingManager {
@@ -103,14 +103,15 @@ export class WebCrawlingManager {
       // Update status to processing
       await this.updateProcessingStatus(jobId, 'processing', 5);
 
-      // Step 1: Initialize crawling session
+      // Step 1: Initialize crawling session with authentication if provided
       const crawlSession = await this.crawlingEngine.initializeCrawlSession(source.source, {
         maxDepth: config.crawlDepth || 3,
         maxPages: config.maxPages || 100,
         allowedDomains: config.allowedDomains || [],
         respectRobotsTxt: true,
         delayBetweenRequests: 1000, // 1 second delay
-        userAgent: 'AI-Assistant-Platform/1.0'
+        userAgent: 'AI-Assistant-Platform/1.0',
+        auth: config.auth
       });
 
       await this.updateProcessingStatus(jobId, 'processing', 10);
@@ -133,7 +134,7 @@ export class WebCrawlingManager {
       await this.updateProcessingStatus(jobId, 'processing', 70);
 
       // Step 5: Extract comprehensive metadata
-      const webMetadata = await this.crawlingEngine.extractWebMetadata(source.source, crawledPages);
+      const webMetadata = await this.crawlingEngine.extractWebMetadata(source.source, crawledPages, config.auth);
       await this.updateProcessingStatus(jobId, 'analyzing', 75);
 
       // Step 6: Generate consolidated content
@@ -277,7 +278,7 @@ export class WebCrawlingManager {
 
           case 'document':
             // Process document resource
-            const docContent = await this.crawlingEngine.extractDocumentContent(resource.url);
+            const docContent = await this.crawlingEngine.extractDocumentContent(resource.url, config.auth);
             if (docContent) {
               processedResource.content = docContent;
               processedResource.processed = true;
@@ -404,9 +405,9 @@ export class WebCrawlingManager {
   /**
    * Extract initial title from URL
    */
-  private async extractInitialTitle(url: string): Promise<string> {
+  private async extractInitialTitle(url: string, authConfig?: AuthConfig): Promise<string> {
     try {
-      return await this.crawlingEngine.extractPageTitle(url);
+      return await this.crawlingEngine.extractPageTitle(url, authConfig);
     } catch (error) {
       return this.generateTitleFromUrl(url);
     }

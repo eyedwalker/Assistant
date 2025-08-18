@@ -160,7 +160,8 @@ Question: ${testQuery}
 
 Please provide a comprehensive answer based on the knowledge base context.`;
 
-      aiResponse = await anthropicAccessor.generateChatResponse(prompt);
+      const response = await anthropicAccessor.generateChatResponse(prompt);
+      aiResponse = typeof response === 'string' ? response : (response as any).content || JSON.stringify(response);
       console.log('✅ AI generated response using knowledge base');
     }
 
@@ -171,10 +172,10 @@ Please provide a comprehensive answer based on the knowledge base context.`;
         totalDocuments: urlsToProcess.length,
         totalChunks: knowledgeBase.length,
         totalEmbeddings: knowledgeBase.length,
-        documentsProcessed: knowledgeBase.reduce((acc, entry) => {
+        documentsProcessed: knowledgeBase.reduce((acc: string[], entry) => {
           const docId = entry.metadata.documentId;
           return acc.includes(docId) ? acc : [...acc, docId];
-        }, []).length
+        }, [] as string[]).length
       },
       ragTest: {
         query: testQuery,

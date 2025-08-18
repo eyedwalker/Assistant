@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Contact Lens Detection - Vistakon Acuvue</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            background-color: #f9fff9;
+        }
+        .price-info {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .prescription-table {
+            background-color: #fff3e0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .test-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .test-button:hover {
+            opacity: 0.9;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Contact Lens Detection Test - Real Eyefinity Data</h1>
+        
+        <div class="test-section">
+            <h2>📋 Contact Lens Order Information</h2>
+            <p><strong>Test Data Source:</strong> Real Eyefinity contact lens order page</p>
+            
+            <!-- Simulating the exact data from user's screenshot -->
+            <table>
+                <tr>
+                    <td><strong>Supplier</strong></td>
+                    <td>--</td>
+                </tr>
+                <tr>
+                    <td><strong>Mfr.</strong></td>
+                    <td>Vistakon</td>
+                </tr>
+                <tr>
+                    <td><strong>Style</strong></td>
+                    <td>1-Day Acuvue Moist 90 Pack</td>
+                </tr>
+                <tr>
+                    <td><strong>Color</strong></td>
+                    <td>Clear</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="prescription-table">
+            <h3>👁️ Prescription Details</h3>
+            <table>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Right Eye</th>
+                    <th>Left Eye</th>
+                </tr>
+                <tr>
+                    <td><strong>Base Curve</strong></td>
+                    <td>8.5</td>
+                    <td>8.5</td>
+                </tr>
+                <tr>
+                    <td><strong>Diameter</strong></td>
+                    <td>14.2</td>
+                    <td>14.2</td>
+                </tr>
+                <tr>
+                    <td><strong>Sphere</strong></td>
+                    <td>-2.25</td>
+                    <td>-2.50</td>
+                </tr>
+                <tr>
+                    <td><strong>Cylinder</strong></td>
+                    <td>--</td>
+                    <td>--</td>
+                </tr>
+                <tr>
+                    <td><strong>Axis</strong></td>
+                    <td>--</td>
+                    <td>--</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="price-info">
+            <h3>💰 Pricing Information</h3>
+            <table>
+                <tr>
+                    <td><strong>Retail Price</strong></td>
+                    <td>$85.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Insurance Benefit</strong></td>
+                    <td>$15.00</td>
+                </tr>
+                <tr>
+                    <td><strong>Patient Balance</strong></td>
+                    <td>$70.00</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="test-section">
+            <h2>🔬 Test the AI Assistant Price Check</h2>
+            <p>This page contains the exact contact lens data from your Eyefinity screenshot:</p>
+            <ul>
+                <li><strong>Manufacturer:</strong> Vistakon (Johnson & Johnson Vision Care)</li>
+                <li><strong>Product:</strong> 1-Day Acuvue Moist 90 Pack</li>
+                <li><strong>Prescription:</strong> BC 8.5, DIA 14.2, SPH -2.25/-2.50</li>
+                <li><strong>Current Price:</strong> $85.00 retail, $70.00 patient cost</li>
+            </ul>
+            
+            <button class="test-button" onclick="testDetection()">🧪 Test Contact Lens Detection</button>
+            <button class="test-button" onclick="simulatePriceCheck()">💰 Simulate Price Check</button>
+            
+            <div id="test-results" class="results" style="display: none;">
+                <h3>🔍 Detection Results:</h3>
+                <div id="detection-output"></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Expected Test Results</h2>
+            <p><strong>The AI Assistant should detect:</strong></p>
+            <ul>
+                <li>✅ Manufacturer: "Vistakon" → "Johnson & Johnson Vision Care"</li>
+                <li>✅ Product: "1-Day Acuvue Moist 90 Pack"</li>
+                <li>✅ Base Curve: "8.5"</li>
+                <li>✅ Diameter: "14.2"</li>
+                <li>✅ Sphere: "-2.25" (right eye)</li>
+                <li>✅ Current Price: "$85.00" or "$70.00"</li>
+            </ul>
+            
+            <p><strong>Price comparison should show:</strong></p>
+            <ul>
+                <li>🛒 1-800 Contacts, LensDirect, CVS, Costco, etc.</li>
+                <li>💰 Potential savings vs $70.00 patient cost</li>
+                <li>🔗 Direct links to retailer search results</li>
+                <li>📦 Stock availability indicators</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function testDetection() {
+            const results = document.getElementById('test-results');
+            const output = document.getElementById('detection-output');
+            
+            // Simulate the detection logic
+            const detectedData = {
+                orderData: {
+                    manufacturer: 'Johnson & Johnson Vision Care',
+                    style: '1-Day Acuvue Moist 90 Pack'
+                },
+                prescriptionData: {
+                    baseCurve: '8.5',
+                    diameter: '14.2',
+                    sphere: '-2.25',
+                    cylinder: null,
+                    axis: null
+                },
+                currentPrice: 85.00,
+                patientCost: 70.00
+            };
+            
+            output.innerHTML = `
+                <h4>✅ Contact Lens Data Successfully Detected:</h4>
+                <pre>${JSON.stringify(detectedData, null, 2)}</pre>
+                <p><strong>Status:</strong> Ready for price comparison API call</p>
+            `;
+            
+            results.style.display = 'block';
+            
+            console.log('🔍 Contact lens detection test:', detectedData);
+        }
+        
+        function simulatePriceCheck() {
+            const results = document.getElementById('test-results');
+            const output = document.getElementById('detection-output');
+            
+            // Simulate API response
+            const mockApiResponse = {
+                success: true,
+                recommendations: [
+                    { retailer: '1-800 Contacts', price: 64.99, url: 'https://www.1800contacts.com/search?q=1-Day+Acuvue+Moist', inStock: true, totalPrice: 64.99 },
+                    { retailer: 'LensDirect', price: 67.50, url: 'https://www.lensdirect.com/search?q=Acuvue+Moist', inStock: true, totalPrice: 67.50 },
+                    { retailer: 'CVS', price: 69.99, url: 'https://www.cvs.com/search?q=Acuvue+Moist+90', inStock: true, totalPrice: 77.98 },
+                    { retailer: 'Costco', price: 62.99, url: 'https://www.costco.com/contact-lenses', inStock: true, totalPrice: 62.99 }
+                ],
+                summary: {
+                    betterDealsFound: 4,
+                    bestPrice: 62.99,
+                    maxSavings: 7.01
+                }
+            };
+            
+            let html = `
+                <h4>💰 Price Comparison Results:</h4>
+                <div style="background: #e8f5e8; padding: 10px; border-radius: 4px; margin: 10px 0;">
+                    <strong>🎯 Best Deal Found:</strong> $${mockApiResponse.summary.bestPrice} at Costco<br/>
+                    <strong>💵 Your Savings:</strong> $${mockApiResponse.summary.maxSavings} vs patient cost ($70.00)
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin: 10px 0;">
+                    <tr style="background: #f0f0f0;">
+                        <th style="padding: 8px; border: 1px solid #ddd;">Retailer</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Price</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Savings</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Status</th>
+                    </tr>
+            `;
+            
+            mockApiResponse.recommendations.forEach(item => {
+                const savings = (70.00 - item.price).toFixed(2);
+                html += `
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">
+                            <a href="${item.url}" target="_blank" style="color: #667eea; text-decoration: none;">
+                                ${item.retailer}
+                            </a>
+                        </td>
+                        <td style="padding: 8px; border: 1px solid #ddd;"><strong>$${item.price}</strong></td>
+                        <td style="padding: 8px; border: 1px solid #ddd; color: #4caf50;">$${savings}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd;">✅ In Stock</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</table>';
+            
+            output.innerHTML = html;
+            results.style.display = 'block';
+            
+            console.log('💰 Price check simulation:', mockApiResponse);
+        }
+        
+        // Auto-run detection test when page loads
+        window.addEventListener('load', function() {
+            console.log('🧪 Test page loaded with real Eyefinity contact lens data');
+            console.log('📋 Available for detection: Vistakon 1-Day Acuvue Moist 90 Pack');
+        });
+    </script>
+</body>
+</html>

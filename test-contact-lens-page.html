@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>David : Contact Lens Order</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f0f0f0;
+            font-weight: bold;
+        }
+        .price {
+            font-size: 18px;
+            color: #0066cc;
+            font-weight: bold;
+        }
+        .button {
+            background: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        .button:hover {
+            background: #0052a3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Contact Lens Order - VisionWorks</h1>
+        
+        <h2>Patient Information</h2>
+        <table>
+            <tr>
+                <td>Patient Name:</td>
+                <td>David Walker</td>
+            </tr>
+            <tr>
+                <td>Order Date:</td>
+                <td>August 15, 2025</td>
+            </tr>
+            <tr>
+                <td>Order Type:</td>
+                <td>Contact Lens Order</td>
+            </tr>
+        </table>
+
+        <h2>Right Eye (OD)</h2>
+        <table>
+            <tr>
+                <td>Manufacturer:</td>
+                <td>Johnson & Johnson</td>
+            </tr>
+            <tr>
+                <td>Style:</td>
+                <td>Acuvue Oasys 24 Pack</td>
+            </tr>
+            <tr>
+                <td>Base Curve:</td>
+                <td>8.4</td>
+            </tr>
+            <tr>
+                <td>Diameter:</td>
+                <td>14.0</td>
+            </tr>
+            <tr>
+                <td>Sphere:</td>
+                <td>-3.25</td>
+            </tr>
+            <tr>
+                <td>Cylinder:</td>
+                <td>-0.75</td>
+            </tr>
+            <tr>
+                <td>Axis:</td>
+                <td>180</td>
+            </tr>
+            <tr>
+                <td>Quantity:</td>
+                <td>1 box (24 lenses)</td>
+            </tr>
+        </table>
+
+        <h2>Left Eye (OS)</h2>
+        <table>
+            <tr>
+                <td>Manufacturer:</td>
+                <td>Johnson & Johnson</td>
+            </tr>
+            <tr>
+                <td>Style:</td>
+                <td>Acuvue Oasys 24 Pack</td>
+            </tr>
+            <tr>
+                <td>Base Curve:</td>
+                <td>8.4</td>
+            </tr>
+            <tr>
+                <td>Diameter:</td>
+                <td>14.0</td>
+            </tr>
+            <tr>
+                <td>Sphere:</td>
+                <td>-3.00</td>
+            </tr>
+            <tr>
+                <td>Cylinder:</td>
+                <td>-0.50</td>
+            </tr>
+            <tr>
+                <td>Axis:</td>
+                <td>175</td>
+            </tr>
+            <tr>
+                <td>Quantity:</td>
+                <td>1 box (24 lenses)</td>
+            </tr>
+        </table>
+
+        <h2>Order Summary</h2>
+        <table>
+            <tr>
+                <td>Subtotal (2 boxes):</td>
+                <td class="price">$180.00</td>
+            </tr>
+            <tr>
+                <td>Insurance Discount:</td>
+                <td>-$30.00</td>
+            </tr>
+            <tr>
+                <td>Tax:</td>
+                <td>$12.00</td>
+            </tr>
+            <tr>
+                <td><strong>Total:</strong></td>
+                <td class="price"><strong>$162.00</strong></td>
+            </tr>
+        </table>
+
+        <div style="margin-top: 30px;">
+            <button class="button">Submit Order</button>
+            <button class="button" style="background: #666;">Save for Later</button>
+        </div>
+
+        <p style="margin-top: 20px; color: #666; font-size: 12px;">
+            This is a simulated VisionWorks contact lens order page for testing the price matching extension.
+            The extension should detect this page and offer price comparisons for Acuvue Oasys lenses.
+        </p>
+    </div>
+</body>
+</html>

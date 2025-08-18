@@ -15,12 +15,6 @@ const nextConfig = {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
   },
-  // Enable API routes with larger body size for file uploads
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  },
   // Security headers
   async headers() {
     return [

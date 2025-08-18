@@ -22,6 +22,35 @@ export interface CrawlSession {
   queuedUrls: string[];
   robotsParser?: any;
   startTime: Date;
+  authHeaders?: Record<string, string>;
+  cookieJar?: string;
+}
+
+export interface AuthConfig {
+  type: 'none' | 'basic' | 'bearer' | 'oauth' | 'cookie' | 'custom';
+  credentials?: {
+    username?: string;
+    password?: string;
+    token?: string;
+    apiKey?: string;
+    clientId?: string;
+    clientSecret?: string;
+    accessToken?: string;
+    refreshToken?: string;
+  };
+  headers?: Record<string, string>;
+  cookies?: Array<{
+    name: string;
+    value: string;
+    domain?: string;
+    path?: string;
+  }>;
+  oauth?: {
+    authUrl?: string;
+    tokenUrl?: string;
+    scope?: string;
+    grantType?: 'authorization_code' | 'client_credentials' | 'password';
+  };
 }
 
 export interface CrawlOptions {
@@ -35,6 +64,7 @@ export interface CrawlOptions {
   timeout: number;
   includeMedia: boolean;
   includeDocuments: boolean;
+  auth?: AuthConfig;
 }
 
 export class WebCrawlingEngine {
@@ -75,10 +105,18 @@ export class WebCrawlingEngine {
       startTime: new Date()
     };
 
+    // Setup authentication
+    if (mergedOptions.auth && mergedOptions.auth.type !== 'none') {
+      session.authHeaders = await this.setupAuthentication(mergedOptions.auth, baseUrl);
+      if (mergedOptions.auth.type === 'cookie' && mergedOptions.auth.cookies) {
+        session.cookieJar = this.buildCookieString(mergedOptions.auth.cookies);
+      }
+    }
+
     // Load robots.txt if required
     if (mergedOptions.respectRobotsTxt) {
       try {
-        session.robotsParser = await this.loadRobotsTxt(baseUrl, mergedOptions.userAgent);
+        session.robotsParser = await this.loadRobotsTxt(baseUrl, mergedOptions.userAgent, session.authHeaders);
       } catch (error) {
         console.warn('Failed to load robots.txt:', error instanceof Error ? error.message : String(error));
       }
@@ -157,15 +195,28 @@ export class WebCrawlingEngine {
     try {
       const startTime = Date.now();
       
+      // Build headers with authentication
+      const headers: Record<string, string> = {
+        'User-Agent': session.options.userAgent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1'
+      };
+
+      // Add authentication headers
+      if (session.authHeaders) {
+        Object.assign(headers, session.authHeaders);
+      }
+
+      // Add cookies if present
+      if (session.cookieJar) {
+        headers['Cookie'] = session.cookieJar;
+      }
+      
       const response = await fetch(url, {
-        headers: {
-          'User-Agent': session.options.userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
-        },
+        headers,
         signal: AbortSignal.timeout(session.options.timeout)
       });
 
@@ -216,13 +267,24 @@ export class WebCrawlingEngine {
   }
 
   /**
-   * Extract comprehensive web metadata
+   * Extract comprehensive web metadata with optional authentication
    */
-  async extractWebMetadata(baseUrl: string, pages: CrawledPage[]): Promise<WebMetadata> {
+  async extractWebMetadata(baseUrl: string, pages: CrawledPage[], authConfig?: AuthConfig): Promise<WebMetadata> {
     try {
-      const response = await fetch(baseUrl, {
-        headers: { 'User-Agent': this.DEFAULT_OPTIONS.userAgent }
-      });
+      const headers: Record<string, string> = {
+        'User-Agent': this.DEFAULT_OPTIONS.userAgent
+      };
+
+      if (authConfig && authConfig.type !== 'none') {
+        const authHeaders = await this.setupAuthentication(authConfig, baseUrl);
+        Object.assign(headers, authHeaders);
+        
+        if (authConfig.type === 'cookie' && authConfig.cookies) {
+          headers['Cookie'] = this.buildCookieString(authConfig.cookies);
+        }
+      }
+
+      const response = await fetch(baseUrl, { headers });
       
       const html = await response.text();
       const $ = cheerio.load(html);
@@ -346,13 +408,24 @@ export class WebCrawlingEngine {
   }
 
   /**
-   * Extract page title
+   * Extract page title with optional authentication
    */
-  async extractPageTitle(url: string): Promise<string> {
+  async extractPageTitle(url: string, authConfig?: AuthConfig): Promise<string> {
     try {
-      const response = await fetch(url, {
-        headers: { 'User-Agent': this.DEFAULT_OPTIONS.userAgent }
-      });
+      const headers: Record<string, string> = {
+        'User-Agent': this.DEFAULT_OPTIONS.userAgent
+      };
+
+      if (authConfig && authConfig.type !== 'none') {
+        const authHeaders = await this.setupAuthentication(authConfig, url);
+        Object.assign(headers, authHeaders);
+        
+        if (authConfig.type === 'cookie' && authConfig.cookies) {
+          headers['Cookie'] = this.buildCookieString(authConfig.cookies);
+        }
+      }
+
+      const response = await fetch(url, { headers });
       const html = await response.text();
       const $ = cheerio.load(html);
       return this.extractTitle($);
@@ -362,11 +435,22 @@ export class WebCrawlingEngine {
   }
 
   /**
-   * Extract document content from URL
+   * Extract document content from URL with optional authentication
    */
-  async extractDocumentContent(url: string): Promise<string | null> {
+  async extractDocumentContent(url: string, authConfig?: AuthConfig): Promise<string | null> {
     try {
-      const response = await fetch(url);
+      const headers: Record<string, string> = {};
+
+      if (authConfig && authConfig.type !== 'none') {
+        const authHeaders = await this.setupAuthentication(authConfig, url);
+        Object.assign(headers, authHeaders);
+        
+        if (authConfig.type === 'cookie' && authConfig.cookies) {
+          headers['Cookie'] = this.buildCookieString(authConfig.cookies);
+        }
+      }
+
+      const response = await fetch(url, headers ? { headers } : {});
       const contentType = response.headers.get('content-type') || '';
       
       if (contentType.includes('application/pdf')) {
@@ -439,10 +523,113 @@ export class WebCrawlingEngine {
     return `crawl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  private async loadRobotsTxt(baseUrl: string, userAgent: string): Promise<any> {
+  /**
+   * Setup authentication headers based on auth configuration
+   */
+  private async setupAuthentication(authConfig: AuthConfig, baseUrl: string): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {};
+
+    switch (authConfig.type) {
+      case 'basic':
+        if (authConfig.credentials?.username && authConfig.credentials?.password) {
+          const credentials = Buffer.from(
+            `${authConfig.credentials.username}:${authConfig.credentials.password}`
+          ).toString('base64');
+          headers['Authorization'] = `Basic ${credentials}`;
+        }
+        break;
+
+      case 'bearer':
+        if (authConfig.credentials?.token) {
+          headers['Authorization'] = `Bearer ${authConfig.credentials.token}`;
+        }
+        break;
+
+      case 'oauth':
+        if (authConfig.credentials?.accessToken) {
+          headers['Authorization'] = `Bearer ${authConfig.credentials.accessToken}`;
+        } else if (authConfig.oauth?.grantType === 'client_credentials' && 
+                   authConfig.credentials?.clientId && 
+                   authConfig.credentials?.clientSecret &&
+                   authConfig.oauth?.tokenUrl) {
+          // Fetch OAuth token
+          try {
+            const tokenResponse = await this.fetchOAuthToken(authConfig);
+            if (tokenResponse?.access_token) {
+              headers['Authorization'] = `Bearer ${tokenResponse.access_token}`;
+            }
+          } catch (error) {
+            console.error('Failed to fetch OAuth token:', error);
+          }
+        }
+        break;
+
+      case 'custom':
+        if (authConfig.headers) {
+          Object.assign(headers, authConfig.headers);
+        }
+        if (authConfig.credentials?.apiKey) {
+          // Common API key header patterns
+          headers['X-API-Key'] = authConfig.credentials.apiKey;
+        }
+        break;
+
+      case 'cookie':
+        // Cookies are handled separately in cookieJar
+        break;
+    }
+
+    return headers;
+  }
+
+  /**
+   * Fetch OAuth token using client credentials
+   */
+  private async fetchOAuthToken(authConfig: AuthConfig): Promise<any> {
+    if (!authConfig.oauth?.tokenUrl || !authConfig.credentials?.clientId || !authConfig.credentials?.clientSecret) {
+      throw new Error('Missing OAuth configuration');
+    }
+
+    const response = await fetch(authConfig.oauth.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: new URLSearchParams({
+        grant_type: authConfig.oauth.grantType || 'client_credentials',
+        client_id: authConfig.credentials.clientId,
+        client_secret: authConfig.credentials.clientSecret,
+        scope: authConfig.oauth.scope || ''
+      }).toString()
+    });
+
+    if (!response.ok) {
+      throw new Error(`OAuth token request failed: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Build cookie string from cookie array
+   */
+  private buildCookieString(cookies: Array<{name: string; value: string; domain?: string; path?: string}>): string {
+    return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+  }
+
+  private async loadRobotsTxt(baseUrl: string, userAgent: string, authHeaders?: Record<string, string>): Promise<any> {
     try {
       const robotsUrl = new URL('/robots.txt', baseUrl).toString();
-      const response = await fetch(robotsUrl);
+      const headers: Record<string, string> = {
+        'User-Agent': userAgent
+      };
+      
+      if (authHeaders) {
+        Object.assign(headers, authHeaders);
+      }
+
+      const response = await fetch(robotsUrl, { headers });
       
       if (response.ok) {
         const robotsTxt = await response.text();

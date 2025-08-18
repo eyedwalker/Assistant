@@ -334,7 +334,9 @@ FORMATTING REQUIREMENTS:
 - Use clear markdown formatting with headers (##), bullet points (-), and bold text (**bold**)
 - Structure responses with logical sections and subsections
 - Use numbered lists for step-by-step procedures
-- Include line breaks between sections for better readability
+- CRITICAL: Add blank lines between ALL sections, subsections, and list items for proper spacing
+- Add double line breaks (\n\n) between major sections
+- Use single line breaks (\n) between list items within the same section
 - Format complex information in tables when appropriate
 - Use code blocks for technical configurations or settings
 
@@ -348,10 +350,24 @@ CONTENT GUIDELINES:
 
 RESPONSE STRUCTURE:
 - Start with a brief overview if the question is complex
-- Use clear section headers (## Section Name)
-- Provide actionable steps with numbered lists
-- Include relevant examples when helpful
+- Use clear section headers (## Section Name) with blank lines before and after
+- Provide actionable steps with numbered lists, each item on a new line
+- Include relevant examples when helpful, separated by blank lines
 - End with follow-up suggestions or next steps
+- EXAMPLE SPACING:
+  ## Section Header
+  
+  Content paragraph with explanation.
+  
+  ### Subsection
+  
+  - List item 1
+  - List item 2
+  - List item 3
+  
+  ## Next Section
+  
+  More content here.
 
 ${context ? `\nRELEVANT CONTEXT:\n${context}` : ''}
 

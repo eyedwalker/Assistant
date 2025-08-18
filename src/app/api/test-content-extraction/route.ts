@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
           'Accept-Language': 'en-US,en;q=0.5',
         },
         maxRedirects: 5,
-        validateStatus: (status) => status < 400,
+        validateStatus: (status: number) => status < 400,
       });
       
       const cheerio = require('cheerio');

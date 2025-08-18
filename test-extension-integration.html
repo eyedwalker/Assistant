@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Integration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .pending { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        #console {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Contact Lens Extension Integration Test</h1>
+        
+        <div class="status info">
+            <strong>Test Page URL:</strong> <span id="current-url"></span>
+        </div>
+
+        <h2>1. Extension Detection Test</h2>
+        <button onclick="testDetection()">Test Detection</button>
+        <div id="detection-status" class="status pending">Waiting for test...</div>
+
+        <h2>2. API Connection Test</h2>
+        <button onclick="testAPI()">Test API</button>
+        <div id="api-status" class="status pending">Waiting for test...</div>
+
+        <h2>3. Simulate Contact Lens Page</h2>
+        <button onclick="simulatePage()">Simulate VisionWorks Page</button>
+        
+        <!-- Simulated contact lens data -->
+        <div id="lens-content" style="display: none;">
+            <h3>Contact Lens Order</h3>
+            <table>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Right Eye</th>
+                    <th>Left Eye</th>
+                </tr>
+                <tr>
+                    <td>Manufacturer</td>
+                    <td>Johnson & Johnson</td>
+                    <td>Johnson & Johnson</td>
+                </tr>
+                <tr>
+                    <td>Style</td>
+                    <td>Acuvue Oasys 24 Pack</td>
+                    <td>Acuvue Oasys 24 Pack</td>
+                </tr>
+                <tr>
+                    <td>Base Curve</td>
+                    <td>8.4</td>
+                    <td>8.4</td>
+                </tr>
+                <tr>
+                    <td>Diameter</td>
+                    <td>14.0</td>
+                    <td>14.0</td>
+                </tr>
+                <tr>
+                    <td>Sphere</td>
+                    <td>-2.00</td>
+                    <td>-2.50</td>
+                </tr>
+            </table>
+            <div>Price: $372.00</div>
+        </div>
+
+        <h2>4. Manual Overlay Test</h2>
+        <button onclick="testOverlay()">Show Test Overlay</button>
+
+        <h2>Console Output</h2>
+        <div id="console"></div>
+    </div>
+
+    <script>
+        const log = (msg, type = 'info') => {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#f00' : type === 'success' ? '#0f0' : '#ff0';
+            console.innerHTML += `<div style="color: ${color}">[${timestamp}] ${msg}</div>`;
+            console.scrollTop = console.scrollHeight;
+        };
+
+        // Update current URL
+        document.getElementById('current-url').textContent = window.location.href;
+
+        // Test detection
+        function testDetection() {
+            log('Testing extension detection...');
+            const status = document.getElementById('detection-status');
+            
+            // Check if extension injected its script
+            if (window.detectContactLensInfo || document.getElementById('price-match-overlay')) {
+                status.className = 'status success';
+                status.textContent = '✓ Extension detected and active';
+                log('Extension is loaded!', 'success');
+            } else {
+                status.className = 'status error';
+                status.textContent = '✗ Extension not detected';
+                log('Extension not found. Make sure it\'s enabled and refresh the page.', 'error');
+            }
+        }
+
+        // Test API
+        async function testAPI() {
+            log('Testing API connection...');
+            const status = document.getElementById('api-status');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/price-match/contact-lens', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        brand: 'Acuvue',
+                        product: 'Oasys 24 Pack',
+                        currentPrice: 90,
+                        baseCurve: '8.4',
+                        diameter: '14.0',
+                        sphere: '-2.00'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    status.className = 'status success';
+                    status.textContent = `✓ API working - Found ${data.recommendations?.length || 0} deals`;
+                    log(`API Response: ${JSON.stringify(data.summary)}`, 'success');
+                } else {
+                    throw new Error(`API returned ${response.status}`);
+                }
+            } catch (error) {
+                status.className = 'status error';
+                status.textContent = `✗ API error: ${error.message}`;
+                log(`API Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Simulate VisionWorks page
+        function simulatePage() {
+            log('Simulating VisionWorks contact lens page...');
+            
+            // Show lens content
+            document.getElementById('lens-content').style.display = 'block';
+            
+            // Update URL to trigger detection
+            if (window.history.replaceState) {
+                window.history.replaceState(null, null, '?ContactLensOrder=true');
+            }
+            
+            // Trigger any mutation observers
+            const event = new Event('DOMContentLoaded');
+            document.dispatchEvent(event);
+            
+            log('Page simulation complete. Extension should detect this now.', 'success');
+        }
+
+        // Manual overlay test
+        function testOverlay() {
+            log('Creating test overlay...');
+            
+            // Remove existing overlay
+            const existing = document.getElementById('price-match-overlay');
+            if (existing) existing.remove();
+            
+            // Create test overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'price-match-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                width: 350px;
+                background: white;
+                border: 2px solid #007AFF;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                z-index: 999999;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            `;
+            
+            overlay.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #007AFF; font-size: 18px;">
+                    💰 Test Overlay Working!
+                </h3>
+                <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">
+                    If you see this, overlay display is working.
+                </p>
+                <button onclick="this.parentElement.remove()" style="
+                    width: 100%;
+                    margin-top: 15px;
+                    padding: 10px;
+                    background: #f1f3f4;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    color: #666;
+                ">Close</button>
+            `;
+            
+            document.body.appendChild(overlay);
+            log('Test overlay added. You should see it in the top-right corner.', 'success');
+        }
+
+        // Listen for console messages from extension
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            log('Extension: ' + args.join(' '), 'info');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            log('Extension Error: ' + args.join(' '), 'error');
+        };
+    </script>
+</body>
+</html>

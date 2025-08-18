@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Eyecare AI Assistant",
+  "version": "1.0.0",
+  "description": "AI-powered assistant for eyecare professionals using Encompass and Eyefinity systems",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "tabs",
+    "contextMenus"
+  ],
+  
+  "host_permissions": [
+    "*://*.encompass.com/*",
+    "*://*.eyefinity.com/*",
+    "http://localhost:3000/*",
+    "https://localhost:3000/*",
+    "*://*/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.encompass.com/*",
+        "*://*.eyefinity.com/*",
+        "*://*/*"
+      ],
+      "js": ["content.js", "content-enhanced.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Eyecare AI Assistant"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.html"],
+      "matches": ["*://*/*"]
+    }
+  ]
+}

@@ -245,6 +245,8 @@ export interface ChartData {
   pageNumber?: number;
 }
 
+import { AuthConfig } from '@/lib/engines/WebCrawlingEngine';
+
 // Processing configuration interfaces
 export interface ProcessingConfig {
   contentType: ContentType;
@@ -258,6 +260,7 @@ export interface ProcessingConfig {
   maxPages?: number; // For document processing limits
   crawlDepth?: number; // For web crawling
   allowedDomains?: string[]; // For web crawling
+  auth?: AuthConfig; // Authentication config for web crawling
   phiDetection: boolean;
   auditLogging: boolean;
 }

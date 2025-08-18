@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Lens Extension Test - API Simulation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .api-response {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .lens-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .lens-card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .lens-card h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .console-log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Contact Lens Extension Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Simulate Eyefinity API Response</h2>
+        <button onclick="simulateGetContactLensVm()" class="test-button">Simulate GetContactLensVm API</button>
+        <button onclick="simulateFetchAPI()" class="test-button">Simulate Fetch API</button>
+        <button onclick="simulateGetOrderPricing()" class="test-button">Simulate GetOrderPricing API</button>
+        <div id="eyefinity-response" class="api-response"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Display Contact Lens Data</h2>
+        <p>This shows contact lens information that should trigger the extension</p>
+        <div class="lens-details">
+            <div class="lens-card">
+                <h3>Left Eye (OS)</h3>
+                <div class="detail-row">
+                    <span>Brand:</span>
+                    <span id="left-brand">Acuvue</span>
+                </div>
+                <div class="detail-row">
+                    <span>Style:</span>
+                    <span id="left-style">Oasys 1-Day with HydraLuxe</span>
+                </div>
+                <div class="detail-row">
+                    <span>Base Curve:</span>
+                    <span id="left-bc">8.5</span>
+                </div>
+                <div class="detail-row">
+                    <span>Diameter:</span>
+                    <span id="left-dia">14.3</span>
+                </div>
+                <div class="detail-row">
+                    <span>Sphere:</span>
+                    <span id="left-sph">-2.50</span>
+                </div>
+                <div class="detail-row">
+                    <span>Price:</span>
+                    <span id="left-price">$89.99</span>
+                </div>
+            </div>
+            
+            <div class="lens-card">
+                <h3>Right Eye (OD)</h3>
+                <div class="detail-row">
+                    <span>Brand:</span>
+                    <span id="right-brand">Acuvue</span>
+                </div>
+                <div class="detail-row">
+                    <span>Style:</span>
+                    <span id="right-style">Oasys 1-Day with HydraLuxe</span>
+                </div>
+                <div class="detail-row">
+                    <span>Base Curve:</span>
+                    <span id="right-bc">8.5</span>
+                </div>
+                <div class="detail-row">
+                    <span>Diameter:</span>
+                    <span id="right-dia">14.3</span>
+                </div>
+                <div class="detail-row">
+                    <span>Sphere:</span>
+                    <span id="right-sph">-2.75</span>
+                </div>
+                <div class="detail-row">
+                    <span>Price:</span>
+                    <span id="right-price">$89.99</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Console Output</h2>
+        <p>Extension console logs will appear here:</p>
+        <div id="console-output" class="console-log">Waiting for extension activity...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Price Match Request</h2>
+        <button onclick="testPriceMatch()">Test Price Match API</button>
+        <div id="price-match-response" class="api-response"></div>
+    </div>
+
+    <script>
+        // Override console.log to capture extension logs
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('console-output');
+        let logBuffer = [];
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : arg
+            ).join(' ');
+            
+            logBuffer.push(`[${new Date().toLocaleTimeString()}] ${message}`);
+            if (logBuffer.length > 50) logBuffer.shift();
+            
+            consoleOutput.textContent = logBuffer.join('\n');
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+
+        // Simulate GetOrderPricing API call
+        function simulateGetOrderPricing() {
+            addLog('Simulating GetOrderPricing API call...');
+            
+            // Create mock order pricing response
+            const mockOrderData = {
+                OrderId: "ORD-2024-001",
+                Items: [
+                    {
+                        ProductType: "ContactLens",
+                        ProductName: "Acuvue Oasys 1-Day",
+                        Manufacturer: "Johnson & Johnson",
+                        Description: "Daily disposable contact lenses",
+                        UnitPrice: 89.99,
+                        Quantity: 2,
+                        LeftBaseCurve: "8.5",
+                        LeftDiameter: "14.3",
+                        LeftPower: "-2.50",
+                        RightBaseCurve: "8.5",
+                        RightDiameter: "14.3",
+                        RightPower: "-2.75"
+                    }
+                ],
+                Total: 179.98
+            };
+            
+            // Make XHR request that will be intercepted
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/GetOrderPricing');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            
+            // Mock the response
+            const originalSend = xhr.send;
+            xhr.send = function() {
+                setTimeout(() => {
+                    Object.defineProperty(xhr, 'status', { value: 200 });
+                    Object.defineProperty(xhr, 'readyState', { value: 4 });
+                    Object.defineProperty(xhr, 'responseText', { value: JSON.stringify(mockOrderData) });
+                    
+                    xhr.dispatchEvent(new Event('readystatechange'));
+                    
+                    addLog('✅ GetOrderPricing API response sent');
+                    displayLensData(mockOrderData.Items[0]);
+                }, 500);
+            };
+            
+            xhr.send(JSON.stringify({ orderId: "ORD-2024-001" }));
+        }
+        
+        // Simulate a fetch API call
+        function simulateFetchAPI() {
+            const apiData = {
+                LeftSupplier: "Acuvue",
+                LeftStyle: "Oasys 1-Day with HydraLuxe",
+                LeftColor: "Clear",
+                LeftBaseCurve: "8.5",
+                LeftDiameter: "14.3",
+                LeftSphere: "-2.50",
+                LeftCylinder: "",
+                LeftAxis: "",
+                LeftAdd: "",
+                LeftQuantity: 1,
+                LeftPrice: 89.99,
+                RightSupplier: "Acuvue",
+                RightStyle: "Oasys 1-Day with HydraLuxe",
+                RightColor: "Clear",
+                RightBaseCurve: "8.5",
+                RightDiameter: "14.3",
+                RightSphere: "-2.75",
+                RightCylinder: "",
+                RightAxis: "",
+                RightAdd: "",
+                RightQuantity: 1,
+                RightPrice: 89.99,
+                StatusCode: 200,
+                StatusMessage: "Success"
+            };
+
+            // Simulate XHR response
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/GetContactLensVm');
+            
+            // Override the response
+            Object.defineProperty(xhr, 'responseText', {
+                writable: true
+            });
+            Object.defineProperty(xhr, 'readyState', {
+                writable: true
+            });
+            Object.defineProperty(xhr, 'status', {
+                writable: true
+            });
+            
+            xhr.send = function() {
+                setTimeout(() => {
+                    xhr.responseText = JSON.stringify(apiData);
+                    xhr.readyState = 4;
+                    xhr.status = 200;
+                    xhr.dispatchEvent(new Event('readystatechange'));
+                    
+                    document.getElementById('eyefinity-response').textContent = 
+                        'API Response:\n' + JSON.stringify(apiData, null, 2);
+                    
+                    console.log('📋 Simulated Eyefinity API response sent');
+                }, 100);
+            };
+            
+            xhr.send();
+        }
+
+        // Test price match directly
+        async function testPriceMatch() {
+            const requestData = {
+                brand: 'Acuvue',
+                product: 'Oasys 1-Day with HydraLuxe',
+                currentPrice: 179.98,
+                baseCurve: '8.5',
+                diameter: '14.3',
+                sphere: '-2.50'
+            };
+
+            try {
+                console.log('🔍 Sending price match request:', requestData);
+                
+                const response = await fetch('http://localhost:3004/api/price-match/contact-lens', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+                console.log('✅ Price match response:', data);
+                
+                document.getElementById('price-match-response').textContent = 
+                    'Price Match Response:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('❌ Price match error:', error);
+                document.getElementById('price-match-response').textContent = 
+                    'Error: ' + error.message;
+            }
+        }
+
+        // Auto-trigger API on load
+        window.addEventListener('load', () => {
+            console.log('🌐 Test page loaded - Extension should detect contact lens data');
+            setTimeout(() => {
+                console.log('🔄 Auto-triggering Eyefinity API simulation...');
+                simulateEyefinityAPI();
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Lens Extension - Complete Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .test-section h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log-output {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .log-entry {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        .log-entry.success { color: #50fa7b; }
+        .log-entry.error { color: #ff5555; }
+        .log-entry.warning { color: #f1fa8c; }
+        .log-entry.info { color: #8be9fd; }
+        .checklist {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .checklist-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+        .check-icon {
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        .check-icon.passed { color: #28a745; }
+        .check-icon.failed { color: #dc3545; }
+        .check-icon.pending { color: #ffc107; }
+        .test-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .result-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .result-card h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 16px;
+        }
+        .price-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Contact Lens Extension - Complete Test Suite</h1>
+        
+        <div class="test-section">
+            <h2>1️⃣ Backend Connection Test</h2>
+            <button onclick="testBackendConnection()">Test Backend Connection</button>
+            <button onclick="testHealthEndpoint()">Check Health Endpoint</button>
+            <button onclick="testPriceMatchAPI()">Test Price Match API</button>
+            <div id="backend-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2️⃣ Extension Status</h2>
+            <button onclick="checkExtensionStatus()">Check Extension Status</button>
+            <button onclick="reloadExtension()">Reload Extension</button>
+            <div id="extension-status"></div>
+            <div class="checklist" id="extension-checklist">
+                <div class="checklist-item">
+                    <span class="check-icon pending">⏳</span>
+                    <span>Extension Loaded</span>
+                </div>
+                <div class="checklist-item">
+                    <span class="check-icon pending">⏳</span>
+                    <span>Content Script Injected</span>
+                </div>
+                <div class="checklist-item">
+                    <span class="check-icon pending">⏳</span>
+                    <span>API Interception Active</span>
+                </div>
+                <div class="checklist-item">
+                    <span class="check-icon pending">⏳</span>
+                    <span>Message Passing Working</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>3️⃣ API Simulation Tests</h2>
+            <button onclick="simulateEyefinityAPI()">Simulate Eyefinity GetContactLensVm</button>
+            <button onclick="simulateOrderPricingAPI()">Simulate GetOrderPricing</button>
+            <button onclick="simulateVisionWorksAPI()">Simulate VisionWorks API</button>
+            <div id="api-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4️⃣ Price Match Results</h2>
+            <div id="price-results" class="test-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 Console Log</h2>
+            <div id="log-output" class="log-output">
+                <div class="log-entry info">Test suite initialized...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Logging helper
+        function log(message, type = 'info') {
+            const logOutput = document.getElementById('log-output');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logOutput.appendChild(entry);
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        // Update status helper
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div class="status ${type}">${message}</div>`;
+            }
+        }
+
+        // Backend Connection Tests
+        async function testBackendConnection() {
+            log('Testing backend connection...', 'info');
+            try {
+                const response = await fetch('http://localhost:3000');
+                if (response.ok) {
+                    updateStatus('backend-status', '✅ Backend is running on port 3000', 'success');
+                    log('Backend connection successful', 'success');
+                } else {
+                    updateStatus('backend-status', `⚠️ Backend responded with status ${response.status}`, 'error');
+                    log(`Backend returned status ${response.status}`, 'warning');
+                }
+            } catch (error) {
+                updateStatus('backend-status', '❌ Backend is not reachable on port 3000', 'error');
+                log(`Backend connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testHealthEndpoint() {
+            log('Testing /api/health endpoint...', 'info');
+            try {
+                const response = await fetch('http://localhost:3000/api/health');
+                const data = await response.json();
+                if (response.ok && data.status === 'ok') {
+                    updateStatus('backend-status', `✅ Health endpoint working: ${data.service} v${data.version}`, 'success');
+                    log('Health endpoint test passed', 'success');
+                } else {
+                    updateStatus('backend-status', '⚠️ Health endpoint returned unexpected response', 'error');
+                    log('Health endpoint test failed', 'error');
+                }
+            } catch (error) {
+                updateStatus('backend-status', '❌ Health endpoint not accessible', 'error');
+                log(`Health endpoint error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPriceMatchAPI() {
+            log('Testing price match API...', 'info');
+            const testData = {
+                brand: 'Acuvue',
+                product: 'Oasys',
+                baseCurve: '8.4',
+                diameter: '14.0',
+                sphere: '-2.50',
+                quantity: 6,
+                currentPrice: 75.99
+            };
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/price-match/contact-lens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(testData)
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    updateStatus('backend-status', 
+                        `✅ Price match API working! Found ${data.recommendations.length} prices. Best price: $${data.summary.bestPrice}`, 
+                        'success');
+                    log(`Price match found ${data.recommendations.length} results`, 'success');
+                    displayPriceResults(data.recommendations);
+                } else {
+                    updateStatus('backend-status', `⚠️ Price match API error: ${data.error || 'Unknown error'}`, 'error');
+                    log(`Price match API error: ${JSON.stringify(data)}`, 'error');
+                }
+            } catch (error) {
+                updateStatus('backend-status', '❌ Price match API request failed', 'error');
+                log(`Price match API error: ${error.message}`, 'error');
+            }
+        }
+
+        // Extension Status Check
+        function checkExtensionStatus() {
+            log('Checking extension status...', 'info');
+            
+            // Check if extension injected its marker
+            if (window.__EYECARE_AI_ASSISTANT_INJECTED__) {
+                updateStatus('extension-status', '✅ Extension content script is active', 'success');
+                log('Extension detected on page', 'success');
+                updateChecklistItem(0, true);
+                updateChecklistItem(1, true);
+                
+                // Test message passing
+                window.postMessage({
+                    type: 'EYECARE_TEST_PING',
+                    source: 'test-page'
+                }, '*');
+                
+                // Check for API interception
+                if (window.__API_INTERCEPTION_ACTIVE__) {
+                    updateChecklistItem(2, true);
+                    log('API interception is active', 'success');
+                }
+            } else {
+                updateStatus('extension-status', '❌ Extension not detected. Please install/enable the extension.', 'error');
+                log('Extension not found on page', 'error');
+                updateChecklistItem(0, false);
+            }
+        }
+
+        function updateChecklistItem(index, passed) {
+            const items = document.querySelectorAll('.checklist-item');
+            if (items[index]) {
+                const icon = items[index].querySelector('.check-icon');
+                icon.className = `check-icon ${passed ? 'passed' : 'failed'}`;
+                icon.textContent = passed ? '✅' : '❌';
+            }
+        }
+
+        function reloadExtension() {
+            log('Extension reload requested. Please reload manually in chrome://extensions/', 'info');
+            updateStatus('extension-status', 'ℹ️ Please go to chrome://extensions/ and click the reload button for the extension', 'info');
+        }
+
+        // API Simulations
+        function simulateEyefinityAPI() {
+            log('Simulating Eyefinity GetContactLensVm API...', 'info');
+            
+            const mockResponse = {
+                ContactLenses: [{
+                    BrandName: "Acuvue Oasys",
+                    ProductName: "with HydraLuxe",
+                    Parameters: {
+                        BaseCurve: "8.4",
+                        Diameter: "14.0",
+                        Sphere: "-3.00"
+                    },
+                    Quantity: 6,
+                    Price: 82.99
+                }]
+            };
+            
+            // Simulate XHR response
+            const event = new CustomEvent('eyefinity-api-response', {
+                detail: { 
+                    url: '/api/GetContactLensVm',
+                    data: mockResponse 
+                }
+            });
+            window.dispatchEvent(event);
+            
+            updateStatus('api-status', '✅ Eyefinity API simulated - check console for lens detection', 'success');
+            log('Eyefinity API simulation sent', 'success');
+        }
+
+        function simulateOrderPricingAPI() {
+            log('Simulating GetOrderPricing API...', 'info');
+            
+            const mockResponse = {
+                OrderItems: [{
+                    ProductType: "ContactLens",
+                    Brand: "Bausch & Lomb",
+                    Name: "Ultra",
+                    Specifications: {
+                        BC: "8.6",
+                        DIA: "14.2",
+                        PWR: "-1.50"
+                    },
+                    Qty: 12,
+                    UnitPrice: 89.99,
+                    TotalPrice: 179.98
+                }]
+            };
+            
+            const event = new CustomEvent('order-pricing-response', {
+                detail: {
+                    url: '/api/GetOrderPricing',
+                    data: mockResponse
+                }
+            });
+            window.dispatchEvent(event);
+            
+            updateStatus('api-status', '✅ Order Pricing API simulated - check for price match overlay', 'success');
+            log('Order Pricing API simulation sent', 'success');
+        }
+
+        function simulateVisionWorksAPI() {
+            log('Simulating VisionWorks API...', 'info');
+            
+            const mockResponse = {
+                lenses: [{
+                    manufacturer: "CooperVision",
+                    product: "Biofinity",
+                    base_curve: 8.6,
+                    diameter: 14.0,
+                    power: -2.25,
+                    box_quantity: 6,
+                    price: 74.99
+                }]
+            };
+            
+            const event = new CustomEvent('visionworks-api-response', {
+                detail: {
+                    url: '/api/contact-lenses',
+                    data: mockResponse
+                }
+            });
+            window.dispatchEvent(event);
+            
+            updateStatus('api-status', '✅ VisionWorks API simulated - extension should process the data', 'success');
+            log('VisionWorks API simulation sent', 'success');
+        }
+
+        // Display price results
+        function displayPriceResults(recommendations) {
+            const resultsDiv = document.getElementById('price-results');
+            resultsDiv.innerHTML = '';
+            
+            recommendations.forEach(rec => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                card.innerHTML = `
+                    <h3>${rec.retailer}</h3>
+                    <div class="price-display">$${rec.price}</div>
+                    <div>Shipping: ${rec.shipping > 0 ? `$${rec.shipping}` : 'FREE'}</div>
+                    <div>Total: $${rec.totalPrice}</div>
+                    <div style="color: ${rec.savings > 0 ? '#28a745' : '#dc3545'}">
+                        ${rec.savings > 0 ? `Save $${rec.savings.toFixed(2)}` : `+$${Math.abs(rec.savings).toFixed(2)}`}
+                    </div>
+                `;
+                resultsDiv.appendChild(card);
+            });
+            log(`Displayed ${recommendations.length} price results`, 'success');
+        }
+
+        // Listen for extension messages
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'EYECARE_EXTENSION_READY') {
+                log('Extension reported ready', 'success');
+                updateChecklistItem(3, true);
+            }
+            if (event.data.type === 'LENS_DATA_DETECTED') {
+                log(`Lens data detected: ${JSON.stringify(event.data.data)}`, 'success');
+            }
+            if (event.data.type === 'PRICE_MATCH_COMPLETE') {
+                log(`Price match complete: ${event.data.results.length} results`, 'success');
+            }
+        });
+
+        // Auto-run basic tests on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testBackendConnection();
+                checkExtensionStatus();
+            }, 1000);
+        });
+
+        // Mark extension as test page
+        window.__EYECARE_TEST_PAGE__ = true;
+    </script>
+</body>
+</html>

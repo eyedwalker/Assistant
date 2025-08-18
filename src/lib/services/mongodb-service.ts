@@ -359,7 +359,7 @@ class MongoDBService {
     await this.ensureConnection();
     const collection = this.getCollection<ProcessingJob>('processing_jobs');
     
-    return await collection.findOneAndUpdate(
+    const result = await collection.findOneAndUpdate(
       { status: 'queued' },
       { 
         $set: { 
@@ -372,6 +372,8 @@ class MongoDBService {
         returnDocument: 'after'
       }
     );
+    
+    return result?.value || null;
   }
 
   async updateProcessingJob(id: string, updates: Partial<ProcessingJob>): Promise<boolean> {
