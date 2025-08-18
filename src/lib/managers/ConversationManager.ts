@@ -20,6 +20,7 @@ export interface ChatRequest {
   context?: {
     documentIds?: string[];
     previousMessages?: number;
+    pageContext?: any;
   };
 }
 

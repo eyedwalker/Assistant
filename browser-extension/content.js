@@ -73,7 +73,13 @@ class EyecareAIAssistant {
           <button class="quick-action-btn" data-action="analyze">Analyze Page</button>
           <button class="quick-action-btn" data-action="price-check" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">💰 Check CL Prices</button>
         </div>
-        <div id="price-status" style="margin-top: 10px; padding: 16px; display: none; background: rgba(102, 126, 234, 0.1); border-radius: 8px; font-size: 14px; max-height: 500px; overflow-y: auto;"></div>
+        <div id="price-status" style="margin-top: 10px; padding: 16px; display: none; background: rgba(102, 126, 234, 0.1); border-radius: 8px; font-size: 14px; max-height: 500px; overflow-y: auto;">
+          <div id="price-results-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-weight: bold;">💰 Contact Lens Price Results</span>
+            <button id="collapse-price-btn" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #666;">−</button>
+          </div>
+          <div id="price-results-content"></div>
+        </div>
       </div>
     `;
 
@@ -83,6 +89,12 @@ class EyecareAIAssistant {
 
     // Add event listeners
     this.setupEventListeners();
+    
+    // Add collapse functionality for price results
+    this.setupPriceCollapseListener();
+    
+    // Add suggestion click listeners
+    this.setupSuggestionListeners();
     
     // Analyze current page context
     this.analyzePageContext();
@@ -113,6 +125,24 @@ class EyecareAIAssistant {
         const action = e.target.dataset.action;
         this.handleQuickAction(action);
       });
+    });
+  }
+
+  setupPriceCollapseListener() {
+    // Add listener for collapse button (will be added dynamically)
+    document.addEventListener('click', (e) => {
+      if (e.target.id === 'collapse-price-btn') {
+        const content = document.getElementById('price-results-content');
+        const button = e.target;
+        
+        if (content.style.display === 'none') {
+          content.style.display = 'block';
+          button.textContent = '−';
+        } else {
+          content.style.display = 'none';
+          button.textContent = '+';
+        }
+      }
     });
   }
 
@@ -269,57 +299,124 @@ class EyecareAIAssistant {
         suggestions.push('📚 Browse available training modules');
     }
     
-    return suggestions.map(s => `<div class="suggestion">${s}</div>`).join('');
+    return suggestions.map(s => `<div class="suggestion" style="cursor: pointer;">${s}</div>`).join('');
   }
 
   addMessage(type, message) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message ${type === 'user' ? 'user-message' : 'ai-message'}`;
-    messageDiv.textContent = message;
-    
     const messagesContainer = document.getElementById('chat-messages');
-    if (messagesContainer) {
-      messagesContainer.appendChild(messageDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (!messagesContainer) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}-message`;
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    // Format message with proper HTML for better readability
+    const formattedMessage = message
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
+      .replace(/^• (.+)$/gm, '<div style="margin: 4px 0; padding-left: 16px;">• $1</div>') // Bullet points
+      .replace(/^(\d+)\. (.+)$/gm, '<div style="margin: 4px 0; padding-left: 16px;">$1. $2</div>') // Numbered lists
+      .replace(/\n\n/g, '<br><br>') // Double line breaks
+      .replace(/\n/g, '<br>'); // Single line breaks
+    
+    contentDiv.innerHTML = formattedMessage;
+    
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'message-time';
+    timeDiv.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    messageDiv.appendChild(contentDiv);
+    messageDiv.appendChild(timeDiv);
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  sendMessage() {
+    const chatInput = document.getElementById('chat-input');
+    const message = chatInput.value.trim();
+    
+    if (message) {
+      chatInput.value = '';
+      this.sendChatMessage(message);
     }
   }
 
-  async sendMessage(message) {
+  async sendChatMessage(message) {
     // Add user message to chat
     this.addMessage('user', message);
     
-    const messagesContainer = document.getElementById('chat-messages');
+    // Get page context for AI
+    const pageContext = {
+      url: window.location.href,
+      title: document.title,
+      pageType: this.detectPageType(),
+      formData: this.extractFormData(),
+      patientData: this.extractPatientData()
+    };
     
-    // Get contact lens context if available
-    const lensDetection = window.detectContactLensInfo ? window.detectContactLensInfo() : null;
-    
-    // Send to background script for processing with context
-    chrome.runtime.sendMessage({
-      type: 'CHAT_MESSAGE',
-      data: { 
-        message,
-        contactLensContext: lensDetection 
+    // Send to backend API for AI processing
+    try {
+      const response = await fetch('http://localhost:3000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: message,
+          context: pageContext,
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        this.addMessage('assistant', result.message || 'I\'m here to help with your eyecare questions!');
+      } else {
+        this.addMessage('assistant', 'I\'m analyzing your question about the current page. How can I help you with eyecare procedures or training?');
       }
-    }, (response) => {
-      if (response && response.success) {
-        this.addMessage('assistant', response.response);
-      }
-    });
+    } catch (error) {
+      console.error('Chat error:', error);
+      this.addMessage('assistant', 'I\'m ready to help! Ask me about eyecare procedures, training modules, or anything on this page.');
+    }
   }
 
-  suggestTraining() {
+  async suggestTraining() {
     const pageType = this.detectPageType();
+    let trainingUrl = '';
     let trainingModule = '';
     
     if (pageType.includes('Patient')) {
-      trainingModule = 'Patient Management training module';
+      trainingModule = 'Patient Management';
+      trainingUrl = 'http://localhost:3000/training/patient-management';
     } else if (pageType.includes('Billing')) {
-      trainingModule = 'Billing & Claims training module';
+      trainingModule = 'Billing & Claims';
+      trainingUrl = 'http://localhost:3000/training/billing-claims';
+    } else if (pageType.includes('Scheduling')) {
+      trainingModule = 'Appointment Scheduling';
+      trainingUrl = 'http://localhost:3000/training/scheduling';
     } else {
       trainingModule = 'Eyefinity Administration Fundamentals';
+      trainingUrl = 'http://localhost:3000/training/fundamentals';
     }
     
-    this.addMessage('assistant', `Based on your current page, I recommend the ${trainingModule}. Would you like me to open it?`);
+    const messageWithLink = `📚 Based on your current page (${pageType}), I recommend the **${trainingModule}** training module.`;
+    this.addMessage('assistant', messageWithLink);
+    
+    // Add clickable training link
+    setTimeout(() => {
+      const linkMessage = `🔗 [Open ${trainingModule} Training](${trainingUrl})`;
+      this.addMessage('assistant', linkMessage);
+      
+      // Make the link actually clickable
+      const lastMessage = document.querySelector('#chat-messages .message:last-child .message-content');
+      if (lastMessage) {
+        lastMessage.innerHTML = lastMessage.textContent.replace(
+          /\[([^\]]+)\]\(([^)]+)\)/g,
+          '<a href="$2" target="_blank" style="color: #3b82f6; text-decoration: underline;">$1</a>'
+        );
+      }
+    }, 500);
   }
 
   analyzeCurrentPage() {
@@ -656,10 +753,67 @@ class EyecareAIAssistant {
     });
 
     html += '</div>';
-    statusDiv.innerHTML = html;
+    
+    // Update the content area instead of the whole status div
+    const contentDiv = document.getElementById('price-results-content');
+    if (contentDiv) {
+      contentDiv.innerHTML = html;
+    } else {
+      statusDiv.innerHTML = html;
+    }
 
     // Add to chat
     this.addMessage('assistant', `Found ${results.matches.length} price matches! Best price is $${bestPrice.toFixed(2)} with potential savings of $${savings.toFixed(2)}.`);
+  }
+  setupSuggestionListeners() {
+    // Add click listeners for context suggestions
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('suggestion')) {
+        const suggestionText = e.target.textContent.trim();
+        
+        if (suggestionText.includes('patient records')) {
+          this.sendChatMessage('How do I manage patient records in Eyefinity?');
+        } else if (suggestionText.includes('Patient Management training')) {
+          this.openTrainingModule('patient-management');
+        } else if (suggestionText.includes('Scheduling best practices')) {
+          this.sendChatMessage('What are the best practices for appointment scheduling?');
+        } else if (suggestionText.includes('Appointment management')) {
+          this.sendChatMessage('Help me with appointment management procedures.');
+        } else if (suggestionText.includes('Insurance claim')) {
+          this.sendChatMessage('How do I process insurance claims?');
+        } else if (suggestionText.includes('Billing procedures')) {
+          this.openTrainingModule('billing-procedures');
+        } else if (suggestionText.includes('eyecare procedure')) {
+          this.sendChatMessage('What eyecare procedures can you help me with?');
+        } else if (suggestionText.includes('training modules')) {
+          this.openTrainingModule('browse-all');
+        }
+      }
+    });
+  }
+
+  openTrainingModule(moduleType) {
+    let trainingUrl = '';
+    
+    switch (moduleType) {
+      case 'patient-management':
+        trainingUrl = 'http://localhost:3000/training/patient-management';
+        break;
+      case 'billing-procedures':
+        trainingUrl = 'http://localhost:3000/training/billing-claims';
+        break;
+      case 'browse-all':
+        trainingUrl = 'http://localhost:3000/training';
+        break;
+      default:
+        trainingUrl = 'http://localhost:3000/training';
+    }
+    
+    // Open training in new tab
+    window.open(trainingUrl, '_blank');
+    
+    // Add confirmation message to chat
+    this.addMessage('assistant', `🚀 Opening ${moduleType.replace('-', ' ')} training module in a new tab!`);
   }
 }
 
