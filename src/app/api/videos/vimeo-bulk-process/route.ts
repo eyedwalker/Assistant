@@ -13,6 +13,7 @@ interface VimeoBulkProcessRequest {
   limit?: number; // Maximum number of videos to process
   processTranscripts?: boolean;
   analyzeContent?: boolean;
+  category?: string; // Video category for organization
 }
 
 export async function POST(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: VimeoBulkProcessRequest = await request.json();
-    const { query, limit = 100, processTranscripts = true, analyzeContent = true } = body;
+    const { query, limit = 100, processTranscripts = true, analyzeContent = true, category = 'eyecare-training' } = body;
 
     // Initialize services
     const vimeoAccessor = new VimeoAccessor(process.env.VIMEO_ACCESS_TOKEN!);
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
             // Create processing job
             const source: ContentSource = {
               type: 'url',
-              url: video.link,
+              source: video.link,
               metadata: {
                 filename: video.name,
                 title: video.name,
@@ -92,16 +93,21 @@ export async function POST(request: NextRequest) {
                 duration: video.duration,
                 vimeoId: video.uri.split('/').pop(),
                 createdTime: video.created_time,
-                modifiedTime: video.modified_time
+                modifiedTime: video.modified_time,
+                category: category
               }
             };
             
             const config: ProcessingConfig = {
-              extractKeyFrames: true,
-              extractTranscript: processTranscripts,
-              performAIAnalysis: analyzeContent,
-              generateSummary: analyzeContent,
-              accessLevel: 'ACCOUNT'
+              contentType: 'video',
+              extractText: true,
+              generateEmbeddings: true,
+              enableTranscription: processTranscripts,
+              enableOCR: false,
+              enableObjectDetection: false,
+              quality: 'medium',
+              phiDetection: true,
+              auditLogging: true
             };
             
             const job = await videoManager.processVideo(

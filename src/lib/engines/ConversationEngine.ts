@@ -71,11 +71,13 @@ export class ConversationEngine {
     
     // Add document context if available
     if (documents.length > 0) {
-      context += 'Relevant documents:\n';
+      context += '=== RELEVANT KNOWLEDGE BASE CONTENT ===\n';
       documents.forEach((doc, index) => {
-        context += `[${index + 1}] ${doc.substring(0, 200)}...\n`;
+        // Include more content from each document (up to 1000 chars each)
+        const docContent = doc.substring(0, 1000);
+        context += `\n[Document ${index + 1}]\n${docContent}\n`;
       });
-      context += '\n';
+      context += '\n=== END OF KNOWLEDGE BASE ===\n\n';
     }
 
     // Add conversation history

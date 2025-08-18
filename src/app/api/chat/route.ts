@@ -56,79 +56,24 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // For development: Simple AI response without full conversation manager
-    let aiResponse = '';
-    
-    if (message.toLowerCase().includes('appointment')) {
-      aiResponse = `📅 **Creating an Appointment in Eyefinity**
+    // Use the full ConversationManager with RAG functionality
+    console.log('🤖 Processing chat request with RAG system...');
+    const chatResponse = await conversationManager.processMessage(chatRequest);
 
-**Main Steps:**
-1. Navigate to the **Schedule** module from the main menu
-2. Click **New Appointment** or press **F2**
-3. Search for the patient by name or ID
-4. Select available time slot
-5. Choose appointment type (exam, follow-up, etc.)
-6. Add any notes or special instructions
-7. Click **Save** to confirm
-
-**Quick Options (since you're on David's Contact Lens Order page):**
-• Click the **Schedule** tab at the top
-• Use the patient quick-actions menu
-• Press **Ctrl+A** for appointment shortcut
-
-💡 Need help with any specific part of the appointment booking process?`;
-    } else if (message.toLowerCase().includes('contact lens')) {
-      aiResponse = `👁️ **Contact Lens Procedures**
-
-**Key Steps:**
-• **Fitting**: Measure base curve, diameter, and power
-• **Ordering**: Use the current Contact Lens Order page you're on
-• **Follow-up**: Schedule 1-2 week check after dispensing
-• **Patient education**: Proper insertion, removal, and care
-
-📋 **Current Context:** You're working with patient David's contact lens order.
-
-🔍 Need specific guidance on any of these procedures?`;
-    } else {
-      aiResponse = `🤖 **Eyecare AI Assistant**
-
-📍 **Current Page:** ${context?.pageType || 'Patient Management'}
-
-**I can help with:**
-• Patient management workflows
-• Appointment scheduling  
-• Contact lens procedures
-• Billing and claims
-• General Eyefinity navigation
-
-❓ **What specific task would you like help with?**`;
-    }
-
-    // Simple response structure
-    const response = {
-      message: aiResponse,
-      sessionId: sessionId || `session-${Date.now()}`,
-      messageId: `msg-${Date.now()}`,
-      confidence: 0.9,
-      sources: ['Eyefinity Training Materials'],
-      followUpQuestions: ['Need help with patient records?', 'Want to learn about billing procedures?'],
-      processingTime: 150,
-      metadata: {
-        pageContext: context?.pageType,
-        phiDetected: false
-      }
-    };
-
+    // Return the RAG-enhanced response
     return NextResponse.json({
       success: true,
-      message: response.message,
-      sessionId: response.sessionId,
-      messageId: response.messageId,
-      confidence: response.confidence,
-      sources: response.sources,
-      followUpQuestions: response.followUpQuestions,
-      processingTime: response.processingTime,
-      metadata: response.metadata,
+      message: chatResponse.message,
+      sessionId: chatResponse.sessionId,
+      messageId: chatResponse.messageId,
+      confidence: chatResponse.confidence,
+      sources: chatResponse.sources,
+      followUpQuestions: chatResponse.followUpQuestions,
+      processingTime: chatResponse.processingTime,
+      metadata: {
+        pageContext: context?.pageType,
+        phiDetected: chatResponse.metadata?.phiDetected || false
+      },
       timestamp: new Date().toISOString()
     }, {
       headers: {

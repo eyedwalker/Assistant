@@ -83,6 +83,7 @@ export default function HomePage() {
     { id: 'training', name: 'Training', icon: CheckCircleIcon },
     { id: 'upload', name: 'Upload', icon: CloudArrowUpIcon },
     { id: 'processing', name: 'Processing Status', icon: ChartBarIcon },
+    { id: 'admin', name: 'Admin Tools', icon: CogIcon },
     { id: 'users', name: 'Users', icon: UsersIcon },
     { id: 'settings', name: 'Settings', icon: CogIcon },
   ];
@@ -256,25 +257,28 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold text-gray-900">
+              <div className="flex-shrink-0 flex items-center">
+                <div className="bg-white rounded-lg p-2 mr-3">
+                  <ChartBarIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <h1 className="text-2xl font-bold text-white">
                   AI Assistant Platform
                 </h1>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-500">
-                Welcome, {mockUser.name}
+              <div className="text-sm text-blue-100">
+                Welcome, <span className="font-semibold text-white">{mockUser.name}</span>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur">
                   {mockUser.accessLevel}
                 </span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white backdrop-blur">
                   {mockUser.role}
                 </span>
               </div>
@@ -286,8 +290,8 @@ export default function HomePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Navigation Tabs */}
         <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2">
+            <nav className="flex flex-wrap gap-2">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -296,9 +300,9 @@ export default function HomePage() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`${
                       activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2`}
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    } px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2 transition-all duration-200`}
                   >
                     <Icon className="h-5 w-5" />
                     <span>{tab.name}</span>
@@ -321,19 +325,30 @@ export default function HomePage() {
               </p>
               
               {/* Status Alert */}
-              <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
-                <div className="flex">
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start">
+                  <CheckCircleIcon className="h-6 w-6 text-green-600 mt-0.5" />
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-semibold text-green-800">
                       Platform Status - All Systems Online
                     </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <ul className="list-disc pl-5 space-y-1">
-                        <li>✅ MongoDB database connected and ready</li>
-                        <li>✅ AWS S3 storage configured and accessible</li>
-                        <li>✅ AI services (Anthropic Claude) active</li>
-                        <li>✅ All API endpoints functional</li>
-                      </ul>
+                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-green-700">
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        <span>MongoDB database connected and ready</span>
+                      </div>
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        <span>AWS S3 storage configured and accessible</span>
+                      </div>
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        <span>AI services (Anthropic Claude) active</span>
+                      </div>
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        <span>All API endpoints functional</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -342,50 +357,50 @@ export default function HomePage() {
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Documents</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">Ready</p>
+                  </div>
+                  <div className="bg-blue-100 rounded-lg p-3">
                     <DocumentTextIcon className="h-8 w-8 text-blue-600" />
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-500">Documents</p>
-                    <p className="text-2xl font-semibold text-gray-900">Ready</p>
-                  </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <ChatBubbleLeftRightIcon className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-sm font-medium text-gray-500">AI Assistant</p>
-                    <p className="text-2xl font-semibold text-green-600">Active</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">Active</p>
+                  </div>
+                  <div className="bg-green-100 rounded-lg p-3">
+                    <ChatBubbleLeftRightIcon className="h-8 w-8 text-green-600" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <CloudArrowUpIcon className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-sm font-medium text-gray-500">Processing</p>
-                    <p className="text-2xl font-semibold text-green-600">Ready</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">Ready</p>
+                  </div>
+                  <div className="bg-purple-100 rounded-lg p-3">
+                    <CloudArrowUpIcon className="h-8 w-8 text-purple-600" />
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <ChartBarIcon className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
                     <p className="text-sm font-medium text-gray-500">Platform</p>
-                    <p className="text-2xl font-semibold text-green-600">Online</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">Online</p>
+                  </div>
+                  <div className="bg-orange-100 rounded-lg p-3">
+                    <ChartBarIcon className="h-8 w-8 text-orange-600" />
                   </div>
                 </div>
               </div>
@@ -393,27 +408,33 @@ export default function HomePage() {
 
             {/* Features Overview */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Platform Features</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-6">Platform Features</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="text-center p-4 border border-gray-200 rounded-lg">
-                  <DocumentTextIcon className="h-12 w-12 text-blue-600 mx-auto mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-2">Document Processing</h4>
+                <div className="group text-center p-6 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all duration-200">
+                  <div className="bg-gradient-to-br from-blue-100 to-blue-50 rounded-full p-4 w-fit mx-auto mb-4">
+                    <DocumentTextIcon className="h-10 w-10 text-blue-600" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Document Processing</h4>
                   <p className="text-sm text-gray-600">
                     Multi-strategy content extraction from URLs and files with AI analysis
                   </p>
                 </div>
                 
-                <div className="text-center p-4 border border-gray-200 rounded-lg">
-                  <ChatBubbleLeftRightIcon className="h-12 w-12 text-blue-600 mx-auto mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-2">AI Assistant</h4>
+                <div className="group text-center p-6 border border-gray-200 rounded-lg hover:border-green-300 hover:shadow-md transition-all duration-200">
+                  <div className="bg-gradient-to-br from-green-100 to-green-50 rounded-full p-4 w-fit mx-auto mb-4">
+                    <ChatBubbleLeftRightIcon className="h-10 w-10 text-green-600" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">AI Assistant</h4>
                   <p className="text-sm text-gray-600">
                     RAG-based conversational AI with document context and source attribution
                   </p>
                 </div>
                 
-                <div className="text-center p-4 border border-gray-200 rounded-lg">
-                  <CloudArrowUpIcon className="h-12 w-12 text-blue-600 mx-auto mb-3" />
-                  <h4 className="font-medium text-gray-900 mb-2">Secure Storage</h4>
+                <div className="group text-center p-6 border border-gray-200 rounded-lg hover:border-purple-300 hover:shadow-md transition-all duration-200">
+                  <div className="bg-gradient-to-br from-purple-100 to-purple-50 rounded-full p-4 w-fit mx-auto mb-4">
+                    <CloudArrowUpIcon className="h-10 w-10 text-purple-600" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Secure Storage</h4>
                   <p className="text-sm text-gray-600">
                     Multi-tenant secure document storage with access control
                   </p>
@@ -1075,6 +1096,174 @@ export default function HomePage() {
                   className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
                 >
                   Check Training Deadlines
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Tools Tab */}
+        {activeTab === 'admin' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Admin Tools & Testing</h2>
+            
+            {/* Quick Admin Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">🎥 Video Processing</h3>
+                <p className="text-sm text-gray-600 mb-4">Bulk process Vimeo videos for AI training</p>
+                <button
+                  onClick={() => window.open('/admin/videos', '_blank')}
+                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                >
+                  Open Video Admin
+                </button>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">🧪 API Testing</h3>
+                <p className="text-sm text-gray-600 mb-4">Test various API endpoints and functionality</p>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => window.open('/api/test-rag', '_blank')}
+                    className="w-full bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm"
+                  >
+                    Test RAG System
+                  </button>
+                  <button
+                    onClick={() => window.open('/api/content/status', '_blank')}
+                    className="w-full bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 text-sm"
+                  >
+                    Content Status
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">🔧 Browser Extension</h3>
+                <p className="text-sm text-gray-600 mb-4">Test browser extension functionality</p>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => window.open('/test-extension-api.html', '_blank')}
+                    className="w-full bg-orange-600 text-white px-3 py-2 rounded-md hover:bg-orange-700 text-sm"
+                  >
+                    Extension API Test
+                  </button>
+                  <button
+                    onClick={() => window.open('/test-extension-complete.html', '_blank')}
+                    className="w-full bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 text-sm"
+                  >
+                    Complete Extension Test
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Database & System Tools */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Database & System Management</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/processing/diagnostics');
+                      const data = await response.json();
+                      alert(`Database Status:\n\nDocuments: ${data.diagnostics?.documents?.length || 0}\nProcessed Content: ${data.diagnostics?.processedContent?.length || 0}\nUsers: ${data.diagnostics?.users?.length || 0}`);
+                    } catch (error) {
+                      alert('Failed to fetch diagnostics');
+                    }
+                  }}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm"
+                >
+                  Database Diagnostics
+                </button>
+                
+                <button
+                  onClick={() => window.open('/api/health', '_blank')}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm"
+                >
+                  Health Check
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch('/api/videos/vimeo-bulk-process');
+                      const data = await response.json();
+                      alert(`Vimeo Bulk Processing:\n\n${data.description}\n\nEndpoint: ${data.usage.endpoint}`);
+                    } catch (error) {
+                      alert('Failed to get Vimeo info');
+                    }
+                  }}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 text-sm"
+                >
+                  Vimeo Bulk Info
+                </button>
+                
+                <button
+                  onClick={() => {
+                    const testData = {
+                      message: "Test RAG functionality with processed content",
+                      query: "eyecare procedures"
+                    };
+                    fetch('/api/test-rag', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(testData)
+                    }).then(response => response.json())
+                      .then(data => alert(`RAG Test Result:\n\n${JSON.stringify(data, null, 2)}`))
+                      .catch(error => alert('RAG test failed'));
+                  }}
+                  className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 text-sm"
+                >
+                  Test RAG Query
+                </button>
+              </div>
+            </div>
+
+            {/* Contact Lens & Price Matching */}
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Lens & Price Matching</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button
+                  onClick={() => window.open('/test-contact-lens-page.html', '_blank')}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 text-sm"
+                >
+                  Contact Lens Test Page
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    const testData = {
+                      manufacturer: "Acuvue",
+                      product: "Oasys",
+                      basecurve: "8.4",
+                      diameter: "14.0",
+                      sphere: "-2.00",
+                      quantity: 6
+                    };
+                    try {
+                      const response = await fetch('/api/price-match/contact-lens', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(testData)
+                      });
+                      const data = await response.json();
+                      alert(`Price Match Test:\n\nFound ${data.matches?.length || 0} matches\nBest Price: $${data.bestPrice || 'N/A'}\nSavings: $${data.potentialSavings || 'N/A'}`);
+                    } catch (error) {
+                      alert('Price match test failed');
+                    }
+                  }}
+                  className="bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 text-sm"
+                >
+                  Test Price Matching
+                </button>
+                
+                <button
+                  onClick={() => window.open('/test-real-contact-lens.html', '_blank')}
+                  className="bg-cyan-600 text-white px-4 py-2 rounded-md hover:bg-cyan-700 text-sm"
+                >
+                  Real Contact Lens Test
                 </button>
               </div>
             </div>

@@ -214,13 +214,19 @@ export class ConversationManager {
    * Business rule: Validate user access permissions for chat
    */
   private async validateChatAccess(request: ChatRequest): Promise<void> {
-    const users = await this.mongoAccessor.find('users', { userId: request.userId });
+    // Search by either userId or email to handle both cases
+    const users = await this.mongoAccessor.find('users', { 
+      $or: [
+        { userId: request.userId },
+        { email: `${request.userId}@demo.com` }
+      ]
+    });
     let user = users[0];
     
     // Auto-create demo users if they don't exist
     if (!user && request.userId.startsWith('demo-')) {
       const demoUser = {
-        id: request.userId,
+        userId: request.userId,  // Changed from 'id' to 'userId' to match search field
         name: `Demo User ${request.userId.split('-').pop()}`,
         email: `${request.userId}@demo.com`,
         role: 'user',
@@ -234,11 +240,21 @@ export class ConversationManager {
         await this.mongoAccessor.create('users', demoUser);
         user = demoUser;
         console.log(`Auto-created demo user for chat: ${request.userId}`);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to create demo user for chat:', error);
-        // Try to find the user again in case it was created by another request
-        const foundUsers = await this.mongoAccessor.find('users', { userId: request.userId });
-        user = foundUsers[0];
+        // If it's a duplicate key error, the user already exists, so find it
+        if (error.code === 11000) {
+          const foundUsers = await this.mongoAccessor.find('users', { 
+            $or: [
+              { userId: request.userId },
+              { email: `${request.userId}@demo.com` }
+            ]
+          });
+          user = foundUsers[0];
+          if (user) {
+            console.log(`Found existing demo user: ${request.userId}`);
+          }
+        }
       }
     }
     
@@ -490,25 +506,33 @@ export class ConversationManager {
       // Fallback to MongoDB text search
       console.log('🔍 Using MongoDB text search as fallback...');
       
-      const searchCriteria = {
-        userId,
-        tenantId,
-        accessLevel: { $in: this.getAccessibleLevels(accessLevel) },
-        $text: { $search: message }
-      };
+      // For demo users or when access level filtering is too restrictive,
+      // search without strict user/tenant filtering
+      const searchCriteria = userId === 'demo-user-001' || !userId
+        ? { $text: { $search: message } }
+        : {
+            userId,
+            tenantId,
+            accessLevel: { $in: this.getAccessibleLevels(accessLevel) },
+            $text: { $search: message }
+          };
 
-      const relevantDocs = await this.mongoAccessor.find('contents', searchCriteria, {
+      const relevantDocs = await this.mongoAccessor.find('processed_content', searchCriteria, {
         limit: 5,
         sort: { score: { $meta: 'textScore' } }
       });
 
       console.log(`📊 Found ${relevantDocs.length} text search matches`);
+      
+      if (relevantDocs.length > 0) {
+        console.log('📝 First document title:', relevantDocs[0].title);
+        console.log('📝 First document content preview:', relevantDocs[0].content?.substring(0, 100));
+      }
 
       return relevantDocs.map((doc: any) => 
         `**${doc.title}**\n` +
-        `Summary: ${doc.aiAnalysis?.summary || 'No summary available'}\n` +
-        `Key Points: ${doc.aiAnalysis?.keyPoints?.join(', ') || 'None'}\n` +
-        `Content: ${doc.content?.substring(0, 300) || 'No content'}...\n`
+        `Summary: ${doc.summary || doc.aiAnalysis?.summary || 'No summary available'}\n` +
+        `Content: ${doc.content?.substring(0, 500) || 'No content'}...\n`
       );
 
     } catch (error) {
