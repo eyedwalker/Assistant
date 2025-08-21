@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { User } from '@/types';
 import { 
   DocumentTextIcon, 
@@ -8,7 +9,11 @@ import {
   CloudArrowUpIcon,
   ChartBarIcon,
   CogIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  VideoCameraIcon,
+  EyeIcon,
+  BeakerIcon,
+  FolderIcon
 } from '@heroicons/react/24/outline';
 
 interface DashboardProps {
@@ -17,15 +22,28 @@ interface DashboardProps {
 
 export default function Dashboard({ user }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const router = useRouter();
 
   const navigation = [
-    { id: 'overview', name: 'Overview', icon: ChartBarIcon },
-    { id: 'documents', name: 'Documents', icon: DocumentTextIcon },
-    { id: 'chat', name: 'AI Assistant', icon: ChatBubbleLeftRightIcon },
-    { id: 'upload', name: 'Upload', icon: CloudArrowUpIcon },
-    { id: 'users', name: 'Users', icon: UserGroupIcon },
-    { id: 'settings', name: 'Settings', icon: CogIcon },
+    { id: 'overview', name: 'Overview', icon: ChartBarIcon, type: 'tab' },
+    { id: 'documents', name: 'Documents', icon: DocumentTextIcon, type: 'tab' },
+    { id: 'chat', name: 'AI Assistant', icon: ChatBubbleLeftRightIcon, type: 'tab' },
+    { id: 'upload', name: 'Upload', icon: CloudArrowUpIcon, type: 'tab' },
+    { id: 'video-processing', name: 'Video Processing', icon: VideoCameraIcon, type: 'link', href: '/admin/videos' },
+    { id: 'video-results', name: 'Video Results', icon: EyeIcon, type: 'link', href: '/admin/videos/results' },
+    { id: 'ai-testing', name: 'AI Testing', icon: BeakerIcon, type: 'link', href: '/admin/videos/test-ai' },
+    { id: 'content-management', name: 'Content Manager', icon: FolderIcon, type: 'link', href: '/content-management' },
+    { id: 'users', name: 'Users', icon: UserGroupIcon, type: 'tab' },
+    { id: 'settings', name: 'Settings', icon: CogIcon, type: 'tab' },
   ];
+
+  const handleNavigation = (item: any) => {
+    if (item.type === 'link') {
+      router.push(item.href);
+    } else {
+      setActiveTab(item.id);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -68,15 +86,20 @@ export default function Dashboard({ user }: DashboardProps) {
                   return (
                     <li key={item.id}>
                       <button
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => handleNavigation(item)}
                         className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                          activeTab === item.id
+                          activeTab === item.id && item.type === 'tab'
                             ? 'bg-primary-100 text-primary-700'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                       >
                         <Icon className="mr-3 h-5 w-5" />
                         {item.name}
+                        {item.type === 'link' && (
+                          <svg className="ml-auto h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        )}
                       </button>
                     </li>
                   );

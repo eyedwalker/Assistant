@@ -15,8 +15,8 @@
   "host_permissions": [
     "*://*.encompass.com/*",
     "*://*.eyefinity.com/*",
-    "http://localhost:3000/*",
-    "https://localhost:3000/*",
+    "http://localhost:3001/*",
+    "https://localhost:3001/*",
     "*://*/*"
   ],
   
@@ -44,8 +44,8 @@
   
   "web_accessible_resources": [
     {
-      "resources": ["overlay.html"],
-      "matches": ["*://*/*"]
+      "resources": ["content.js", "overlay.js", "styles.css", "auth.js"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

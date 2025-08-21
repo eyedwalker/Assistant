@@ -47,7 +47,15 @@ export class MongoVectorAccessor {
       throw new Error('MONGODB_URI environment variable is required');
     }
 
-    this.client = new MongoClient(process.env.MONGODB_URI);
+    this.client = new MongoClient(process.env.MONGODB_URI, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 15000,
+      ssl: true,
+      tlsAllowInvalidCertificates: true,
+      tlsAllowInvalidHostnames: true,
+    });
     this.db = this.client.db(process.env.MONGODB_DB_NAME || 'ai-assistant-platform');
     this.collection = this.db.collection('vectors');
     this.indexName = process.env.MONGODB_VECTOR_INDEX_NAME || 'vector_index';

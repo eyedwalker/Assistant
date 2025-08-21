@@ -17,12 +17,21 @@ import {
   PlusIcon
 } from '@heroicons/react/24/outline';
 import SimpleProcessingStatus from '@/components/SimpleProcessingStatus';
+import ProactiveRecommendations from '@/components/ProactiveRecommendations';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   sources?: any[];
+  videos?: Array<{
+    title: string;
+    link: string;
+    thumbnail?: string;
+    duration: string;
+    summary?: string;
+    relevance: string;
+  }>;
 }
 
 export default function HomePage() {
@@ -80,10 +89,14 @@ export default function HomePage() {
     { id: 'overview', name: 'Overview', icon: HomeIcon },
     { id: 'documents', name: 'Documents', icon: DocumentTextIcon },
     { id: 'chat', name: 'Chat', icon: ChatBubbleLeftRightIcon },
+    { id: 'video-processing', name: 'Video Processing', icon: CloudArrowUpIcon, url: '/admin/videos' },
+    { id: 'video-results', name: 'Video Results', icon: ChartBarIcon, url: '/admin/videos/results' },
+    { id: 'video-status', name: 'Video Status', icon: DocumentTextIcon, url: '/admin/videos/status' },
+    { id: 'ai-config', name: 'AI Config', icon: CogIcon, url: '/admin/ai-config' },
     { id: 'training', name: 'Training', icon: CheckCircleIcon },
     { id: 'upload', name: 'Upload', icon: CloudArrowUpIcon },
     { id: 'processing', name: 'Processing Status', icon: ChartBarIcon },
-    { id: 'admin', name: 'Admin Tools', icon: CogIcon },
+    { id: 'test-ai', name: 'Test AI', icon: CogIcon, url: '/api/test-bedrock' },
     { id: 'users', name: 'Users', icon: UsersIcon },
     { id: 'settings', name: 'Settings', icon: CogIcon },
   ];
@@ -228,13 +241,24 @@ export default function HomePage() {
       
       if (response.ok) {
         const result = await response.json();
+        console.log('🔍 Full API Response:', result);
+        console.log('🎥 Videos in response:', result.videos);
+        console.log('📚 Sources in response:', result.sources);
+        
         const aiMessage: ChatMessage = { 
           role: 'assistant', 
           content: result.message, 
           timestamp: new Date(),
-          sources: result.sources 
+          sources: result.sources,
+          videos: result.videos // Include video recommendations from API
         };
-        setChatMessages(prev => [...prev, aiMessage]);
+        console.log('💬 Chat Message being added:', aiMessage);
+        console.log('🎬 Videos in chat message:', aiMessage.videos);
+        setChatMessages(prev => {
+          const updatedMessages = [...prev, aiMessage];
+          console.log('📝 All chat messages after update:', updatedMessages);
+          return updatedMessages;
+        });
       } else {
         const error = await response.json();
         const errorMessage: ChatMessage = { 
@@ -294,6 +318,24 @@ export default function HomePage() {
             <nav className="flex flex-wrap gap-2">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
+                
+                // If tab has a URL, render as a link
+                if (tab.url) {
+                  return (
+                    <a
+                      key={tab.id}
+                      href={tab.url}
+                      target={tab.url.startsWith('/api/') ? '_blank' : '_self'}
+                      rel={tab.url.startsWith('/api/') ? 'noopener noreferrer' : undefined}
+                      className="bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 px-4 py-2 rounded-lg font-medium text-sm flex items-center space-x-2 transition-all duration-200"
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span>{tab.name}</span>
+                    </a>
+                  );
+                }
+                
+                // Regular tab switching for internal tabs
                 return (
                   <button
                     key={tab.id}
@@ -329,9 +371,14 @@ export default function HomePage() {
                 <div className="flex items-start">
                   <CheckCircleIcon className="h-6 w-6 text-green-600 mt-0.5" />
                   <div className="ml-3 flex-1">
-                    <h3 className="text-sm font-semibold text-green-800">
-                      Platform Status - All Systems Online
-                    </h3>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-green-800">
+                        Platform Status - All Systems Online
+                      </h3>
+                      <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                        v2.1.0 - Enhanced Features ✨
+                      </div>
+                    </div>
                     <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-green-700">
                       <div className="flex items-center">
                         <CheckCircleIcon className="h-4 w-4 mr-2" />
@@ -348,6 +395,14 @@ export default function HomePage() {
                       <div className="flex items-center">
                         <CheckCircleIcon className="h-4 w-4 mr-2" />
                         <span>All API endpoints functional</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-green-200">
+                      <div className="flex flex-wrap gap-2 text-xs text-green-600">
+                        <span className="bg-green-100 px-2 py-1 rounded">🎥 Clickable Video Recommendations</span>
+                        <span className="bg-green-100 px-2 py-1 rounded">🔗 Clickable Resource Links</span>
+                        <span className="bg-green-100 px-2 py-1 rounded">🤖 Browser Extension Integration</span>
+                        <span className="bg-green-100 px-2 py-1 rounded">📚 Enhanced RAG Context</span>
                       </div>
                     </div>
                   </div>
@@ -547,6 +602,24 @@ export default function HomePage() {
         {activeTab === 'chat' && (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">AI Assistant Chat</h2>
+            
+            {/* Proactive Recommendations */}
+            <div className="mb-6">
+              <ProactiveRecommendations 
+                pageContext={contactLensContext ? {
+                  pageType: 'contact-lens-order',
+                  product: contactLensContext.manufacturer,
+                  activity: 'viewing product details',
+                  userRole: 'sales-rep'
+                } : {
+                  pageType: 'ai-assistant-dashboard',
+                  activity: 'using chat interface',
+                  userRole: 'user'
+                }}
+                position="inline"
+              />
+            </div>
+
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
               {/* Chat Messages */}
               <div className="p-6 h-96 overflow-y-auto border-b border-gray-200">
@@ -559,14 +632,115 @@ export default function HomePage() {
                   <div className="space-y-4">
                     {chatMessages.map((message, index) => (
                       <div key={index} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        <div className={`${message.role === 'user' ? 'max-w-xs lg:max-w-md' : 'max-w-full lg:max-w-2xl'} px-4 py-2 rounded-lg ${
                           message.role === 'user' 
                             ? 'bg-blue-600 text-white' 
                             : 'bg-gray-100 text-gray-900'
                         }`}>
                           {message.role === 'assistant' ? (
-                            <div className="text-sm prose prose-sm max-w-none">
-                              <ReactMarkdown>{message.content}</ReactMarkdown>
+                            <div className="text-sm">
+                              {/* Video recommendations at top if present */}
+                              {(() => {
+                                console.log('🎬 RENDER CHECK - Message:', message);
+                                console.log('🎬 RENDER CHECK - Videos exist?:', !!message.videos);
+                                console.log('🎬 RENDER CHECK - Videos length:', message.videos?.length || 0);
+                                console.log('🎬 RENDER CHECK - Videos array:', message.videos);
+                                return null;
+                              })()}
+                              {message.videos && message.videos.length > 0 && (
+                                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+                                    🎥 Recommended Training Videos ({message.videos.length})
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {message.videos.map((video: any, idx: number) => (
+                                      <div key={idx} className="flex items-center space-x-3 p-2 bg-white rounded border hover:shadow-sm transition-shadow">
+                                        {video.thumbnail && (
+                                          <img 
+                                            src={video.thumbnail} 
+                                            alt={video.title}
+                                            className="w-16 h-10 object-cover rounded"
+                                          />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <a 
+                                            href={video.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-medium text-blue-600 hover:text-blue-800 text-sm line-clamp-1"
+                                          >
+                                            {video.title}
+                                          </a>
+                                          <p className="text-xs text-gray-500">
+                                            {video.duration} • {video.relevance} relevant
+                                          </p>
+                                        </div>
+                                        <a
+                                          href={video.link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 flex-shrink-0"
+                                        >
+                                          Watch
+                                        </a>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Sources/Links if present */}
+                              {message.sources && message.sources.length > 0 && (
+                                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                                    🔗 Related Resources
+                                  </h4>
+                                  <div className="space-y-1">
+                                    {message.sources.map((source: any, idx: number) => (
+                                      <div key={idx} className="flex items-center space-x-2">
+                                        <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
+                                        {source.url ? (
+                                          <a 
+                                            href={source.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 text-sm underline"
+                                          >
+                                            {source.title || source.url}
+                                          </a>
+                                        ) : (
+                                          <span className="text-gray-700 text-sm">{source.title}</span>
+                                        )}
+                                        {source.type && (
+                                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                            {source.type}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Regular message content */}
+                              <div className="prose prose-sm max-w-none">
+                                <ReactMarkdown
+                                  components={{
+                                    a: ({ href, children }) => (
+                                      <a 
+                                        href={href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline"
+                                      >
+                                        {children}
+                                      </a>
+                                    )
+                                  }}
+                                >
+                                  {message.content}
+                                </ReactMarkdown>
+                              </div>
                             </div>
                           ) : (
                             <p className="text-sm">{message.content}</p>

@@ -271,7 +271,7 @@ class ConversationalAIService {
       );
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 1000,
         temperature: 0.1,
         system: systemPrompt,

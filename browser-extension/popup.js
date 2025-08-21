@@ -2,22 +2,81 @@
 
 class PopupController {
   constructor() {
-    const API_BASE_URL = 'http://localhost:3000';
-    this.apiBaseUrl = API_BASE_URL;
+    this.apiBaseUrl = 'http://localhost:3001';
+    this.auth = new ExtensionAuth();
     this.init();
   }
 
   async init() {
-    console.log('🤖 Popup initializing...');
+    // Check authentication first
+    const isAuthenticated = await this.auth.checkAuth();
     
-    // Setup event listeners
-    this.setupEventListeners();
+    if (!isAuthenticated) {
+      // Show login required message
+      document.body.innerHTML = `
+        <div style="padding: 20px; text-align: center;">
+          <h3 style="color: #667eea;">🔒 Login Required</h3>
+          <p style="color: #666; margin: 15px 0;">Please log in to use the extension</p>
+          <button id="login-btn" style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+          ">Open Login Page</button>
+        </div>
+      `;
+      
+      document.getElementById('login-btn').addEventListener('click', () => {
+        chrome.tabs.create({ url: chrome.runtime.getURL('login.html') });
+        window.close();
+      });
+      return;
+    }
     
-    // Check AI assistant status
-    await this.checkAIStatus();
+    // Show user info
+    const userInfo = this.auth.getUser();
+    if (userInfo && document.querySelector('.header')) {
+      const userDisplay = document.createElement('div');
+      userDisplay.style.cssText = 'padding: 10px; background: #f0f4ff; border-radius: 6px; margin-bottom: 15px;';
+      userDisplay.innerHTML = `
+        <div style="font-size: 12px; color: #667eea; font-weight: bold;">Logged in as:</div>
+        <div style="font-size: 14px; color: #333;">${userInfo.email}</div>
+        <button id="logout-btn" style="
+          margin-top: 8px;
+          background: #fff;
+          color: #667eea;
+          border: 1px solid #667eea;
+          padding: 5px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Logout</button>
+      `;
+      document.querySelector('.header').appendChild(userDisplay);
+      
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        await this.auth.logout();
+        chrome.runtime.sendMessage({ type: 'LOGOUT' });
+        window.close();
+      });
+    }
     
-    // Analyze current page
-    await this.analyzeCurrentPage();
+    // Load saved settings and initialize
+    chrome.storage.sync.get(['enabled', 'autoAnalyze', 'showNotifications'], (data) => {
+      console.log('🤖 Popup initializing...');
+      
+      // Setup event listeners
+      this.setupEventListeners();
+      
+      // Check AI assistant status
+      this.checkAIStatus();
+      
+      // Analyze current page
+      this.analyzeCurrentPage();
+    });
   }
 
   setupEventListeners() {

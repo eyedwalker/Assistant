@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Extension Login Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .test-section h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .login-form {
+            display: grid;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Browser Extension Login Test</h1>
+        
+        <div class="test-section">
+            <h2>1. Direct API Login Test</h2>
+            <div class="login-form">
+                <input type="email" id="email" placeholder="Email (e.g., daviwa2@vsp.com)" value="daviwa2@vsp.com">
+                <input type="text" id="accessCode" placeholder="Access Code (e.g., BETA2024)" value="BETA2024">
+                <button onclick="testDirectLogin()">Test Login API</button>
+            </div>
+            <div id="loginStatus"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2. Extension Status</h2>
+            <button onclick="checkExtensionStatus()">Check Extension Status</button>
+            <div id="extensionStatus"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3. Test Video Recommendations</h2>
+            <button onclick="testVideoRecommendations()">Get Video Recommendations</button>
+            <div id="videoStatus"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4. Server Health Check</h2>
+            <button onclick="checkServerHealth()">Check Server Health</button>
+            <div id="healthStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        let authToken = null;
+
+        async function testDirectLogin() {
+            const email = document.getElementById('email').value;
+            const accessCode = document.getElementById('accessCode').value;
+            const statusEl = document.getElementById('loginStatus');
+            
+            statusEl.innerHTML = '<div class="status info">Testing login...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/extension/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, accessCode })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    authToken = data.token;
+                    statusEl.innerHTML = `
+                        <div class="status success">
+                            ✅ Login Successful!<br>
+                            Email: ${data.email}<br>
+                            Name: ${data.name}<br>
+                            Role: ${data.role}<br>
+                            Organization: ${data.organization}<br>
+                            Token: ${data.token.substring(0, 50)}...
+                        </div>
+                    `;
+                    
+                    // Store in browser extension storage if available
+                    if (window.chrome && chrome.storage) {
+                        chrome.storage.sync.set({
+                            authToken: data.token,
+                            userInfo: {
+                                email: data.email,
+                                name: data.name,
+                                role: data.role,
+                                organization: data.organization
+                            }
+                        });
+                    }
+                } else {
+                    statusEl.innerHTML = `<div class="status error">❌ Login Failed: ${data.message || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function checkExtensionStatus() {
+            const statusEl = document.getElementById('extensionStatus');
+            
+            if (window.chrome && chrome.storage) {
+                try {
+                    const stored = await chrome.storage.sync.get(['authToken', 'userInfo']);
+                    if (stored.authToken) {
+                        statusEl.innerHTML = `
+                            <div class="status success">
+                                ✅ Extension is authenticated<br>
+                                User: ${stored.userInfo?.email || 'Unknown'}
+                            </div>
+                        `;
+                    } else {
+                        statusEl.innerHTML = '<div class="status info">Extension not authenticated yet</div>';
+                    }
+                } catch (error) {
+                    statusEl.innerHTML = '<div class="status error">Cannot access extension storage - open this page through the extension</div>';
+                }
+            } else {
+                statusEl.innerHTML = '<div class="status info">Browser extension API not available - test in Chrome with extension loaded</div>';
+            }
+        }
+
+        async function testVideoRecommendations() {
+            const statusEl = document.getElementById('videoStatus');
+            
+            if (!authToken) {
+                statusEl.innerHTML = '<div class="status error">Please login first</div>';
+                return;
+            }
+            
+            statusEl.innerHTML = '<div class="status info">Fetching video recommendations...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        message: 'What training videos do you recommend for contact lens fitting?',
+                        context: {
+                            pageUrl: 'test-page',
+                            pageContent: 'Contact lens fitting guide'
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.videos && data.videos.length > 0) {
+                    let videoHtml = '<div class="status success">✅ Video Recommendations Found:<br><br>';
+                    data.videos.forEach(video => {
+                        videoHtml += `
+                            <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 5px;">
+                                <strong>${video.title}</strong><br>
+                                Duration: ${video.duration} | Relevance: ${video.relevance}<br>
+                                <a href="${video.link}" target="_blank">Watch Video</a>
+                            </div>
+                        `;
+                    });
+                    videoHtml += '</div>';
+                    statusEl.innerHTML = videoHtml;
+                } else {
+                    statusEl.innerHTML = `<div class="status info">Response: ${data.message || 'No videos found'}</div>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function checkServerHealth() {
+            const statusEl = document.getElementById('healthStatus');
+            statusEl.innerHTML = '<div class="status info">Checking server...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'healthy') {
+                    statusEl.innerHTML = `
+                        <div class="status success">
+                            ✅ Server is healthy<br>
+                            Database: ${data.database}<br>
+                            AI Service: ${data.aiService}<br>
+                            Timestamp: ${new Date(data.timestamp).toLocaleString()}
+                        </div>
+                    `;
+                } else {
+                    statusEl.innerHTML = `<div class="status error">Server unhealthy: ${JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                statusEl.innerHTML = `<div class="status error">❌ Cannot connect to server at ${API_BASE}</div>`;
+            }
+        }
+
+        // Auto-check server on load
+        window.onload = () => {
+            checkServerHealth();
+        };
+    </script>
+</body>
+</html>

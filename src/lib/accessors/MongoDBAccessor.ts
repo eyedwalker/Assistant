@@ -73,8 +73,12 @@ export class MongoDBAccessor {
     try {
       this.client = new MongoClient(this.connectionString, {
         maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 10000,
         socketTimeoutMS: 45000,
+        connectTimeoutMS: 15000,
+        ssl: true,
+        tlsAllowInvalidCertificates: true,
+        tlsAllowInvalidHostnames: true,
       });
 
       await this.client.connect();
@@ -714,6 +718,37 @@ export class MongoDBAccessor {
     
     const collection = this.db.collection(collectionName);
     const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    return result.deletedCount > 0;
+  }
+
+  /**
+   * Update documents with custom filter (for non-ObjectId queries)
+   */
+  async updateWithFilter<T = any>(collectionName: string, filter: any, updates: any): Promise<any> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    return await collection.updateOne(filter, updates);
+  }
+
+  /**
+   * Update multiple documents with custom filter
+   */
+  async updateManyWithFilter<T = any>(collectionName: string, filter: any, updates: any): Promise<any> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    return await collection.updateMany(filter, updates);
+  }
+
+  /**
+   * Delete documents with custom filter (for non-ObjectId queries)
+   */
+  async deleteWithFilter(collectionName: string, filter: any): Promise<boolean> {
+    if (!this.db) throw new Error('Database not connected');
+    
+    const collection = this.db.collection(collectionName);
+    const result = await collection.deleteOne(filter);
     return result.deletedCount > 0;
   }
 

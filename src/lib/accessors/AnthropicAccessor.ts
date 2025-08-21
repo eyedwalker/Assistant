@@ -57,7 +57,7 @@ export class AnthropicAccessor {
       const prompt = this.buildAnalysisPrompt(content, options);
       
       const response = await this.client.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 1000,
         messages: [{
           role: 'user',
@@ -183,7 +183,7 @@ Content to analyze:
 ${content}`;
 
       const response = await this.client.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 1500,
         messages: [{
           role: 'user',
@@ -249,7 +249,7 @@ Content:
 ${content}`;
 
       const response = await this.client.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 2000,
         messages: [{
           role: 'user',
@@ -430,7 +430,7 @@ Please provide helpful, professional, and well-formatted responses to user quest
   async analyzeImage(imageData: string, prompt: string = "Analyze this image and describe what you see."): Promise<string> {
     try {
       const response = await this.client.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 1000,
         messages: [{
           role: 'user',

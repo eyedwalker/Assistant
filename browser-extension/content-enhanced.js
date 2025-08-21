@@ -744,7 +744,7 @@ function extractPageSpecificData() {
         url: lensData.url || window.location.href
       };
       
-      const response = await fetch('http://localhost:3000/api/price-match/contact-lens', {
+      const response = await fetch('http://localhost:3001/api/price-match/contact-lens', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1008,7 +1008,7 @@ async function requestPriceMatchFromApi(lensInfo) {
       console.log('Price match API request:', requestBody);
       
       // Use the correct API URL
-      const response = await fetch('http://localhost:3000/api/price-match/contact-lens', {
+      const response = await fetch('http://localhost:3001/api/price-match/contact-lens', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1056,7 +1056,7 @@ function triggerAIAssistant(prescriptionData) {
   console.log('🤖 Triggering AI assistant with prescription:', prescriptionData);
   
   // Send prescription to AI for analysis
-  fetch('http://localhost:3000/api/ai/analyze-prescription', {
+  fetch('http://localhost:3001/api/ai/analyze-prescription', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1327,3 +1327,272 @@ if (!hasProcessedThisPage) {
   });
 
 })();
+
+// AI Assistant Functions for Browser Extension
+window.aiAssistant = {
+  // Analyze current page and suggest training
+  analyzeCurrentPage: async function() {
+    console.log('🔍 Analyzing current page for training recommendations...');
+    
+    const pageContext = this.getPageContext();
+    const message = `Based on this ${pageContext.pageType} page, what training videos or resources would help me work more effectively?`;
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message,
+          context: pageContext
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success && (result.videos?.length > 0 || result.sources?.length > 0)) {
+        this.displayTrainingRecommendations(result, 'Page Analysis');
+      } else {
+        this.showAIOverlay('No specific training found for this page type. Try the general training search.');
+      }
+    } catch (error) {
+      console.error('Failed to analyze page:', error);
+      this.showAIOverlay('Unable to connect to AI assistant. Please try again.');
+    }
+  },
+
+  // Find training based on current context
+  suggestTraining: async function() {
+    console.log('🎓 Finding training recommendations...');
+    
+    const pageContext = this.getPageContext();
+    const message = `I need training help for: ${pageContext.pageType}. Show me relevant videos and documentation.`;
+    
+    try {
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message,
+          context: pageContext
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success && (result.videos?.length > 0 || result.sources?.length > 0)) {
+        this.displayTrainingRecommendations(result, 'Training Recommendations');
+      } else {
+        this.showAIOverlay('No training found. Try searching for specific topics in the AI chat.');
+      }
+    } catch (error) {
+      console.error('Failed to get training suggestions:', error);
+      this.showAIOverlay('Unable to connect to AI assistant. Please try again.');
+    }
+  },
+
+  // Get current page context
+  getPageContext: function() {
+    const url = window.location.href;
+    const title = document.title;
+    
+    let pageType = 'Web Page';
+    let activity = 'browsing';
+    
+    // Detect Eyefinity page types
+    if (url.includes('eyefinity.com')) {
+      if (url.includes('/Appointments') || title.toLowerCase().includes('appointment')) {
+        pageType = 'Appointment Management';
+        activity = 'scheduling';
+      } else if (url.includes('/Patient') || title.toLowerCase().includes('patient')) {
+        pageType = 'Patient Management';
+        activity = 'patient-care';
+      } else if (url.includes('/Billing') || title.toLowerCase().includes('billing')) {
+        pageType = 'Billing & Claims';
+        activity = 'billing';
+      } else if (url.includes('/Inventory') || title.toLowerCase().includes('inventory')) {
+        pageType = 'Inventory Management';
+        activity = 'inventory';
+      } else if (url.includes('/Reports') || title.toLowerCase().includes('report')) {
+        pageType = 'Reports & Analytics';
+        activity = 'reporting';
+      } else {
+        pageType = 'Eyecare System';
+        activity = 'system-navigation';
+      }
+    }
+    
+    // Detect form data
+    const forms = document.querySelectorAll('form');
+    const inputs = document.querySelectorAll('input, select, textarea');
+    const formData = {};
+    
+    inputs.forEach(input => {
+      if (input.name && input.value) {
+        formData[input.name] = input.value;
+      }
+    });
+
+    return {
+      url,
+      title,
+      pageType,
+      activity,
+      formData: Object.keys(formData).length > 0 ? formData : null,
+      timestamp: new Date().toISOString()
+    };
+  },
+
+  // Display training recommendations overlay
+  displayTrainingRecommendations: function(data, title) {
+    // Remove existing overlay
+    const existing = document.getElementById('ai-training-overlay');
+    if (existing) existing.remove();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'ai-training-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 400px;
+      max-height: 80vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      z-index: 10000;
+      color: white;
+      padding: 20px;
+      overflow-y: auto;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    let html = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0; color: white; font-size: 18px;">🎓 ${title}</h3>
+        <button onclick="this.closest('#ai-training-overlay').remove()" 
+                style="background: none; border: none; font-size: 20px; cursor: pointer; color: rgba(255,255,255,0.8);">&times;</button>
+      </div>
+    `;
+    
+    // Add videos if present
+    if (data.videos && data.videos.length > 0) {
+      html += `
+        <div style="margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px 0; font-size: 16px;">🎥 Training Videos</h4>
+          <div style="space-y: 8px;">
+      `;
+      
+      data.videos.forEach(video => {
+        html += `
+          <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+            <a href="${video.link}" target="_blank" 
+               style="color: white; text-decoration: none; font-weight: bold; display: block; margin-bottom: 5px;">
+              ${video.title}
+            </a>
+            <div style="font-size: 12px; color: rgba(255,255,255,0.8);">
+              ⏱️ ${video.duration} • 🎯 ${video.relevance} relevant
+            </div>
+          </div>
+        `;
+      });
+      
+      html += `</div></div>`;
+    }
+    
+    // Add sources if present
+    if (data.sources && data.sources.length > 0) {
+      html += `
+        <div style="margin-bottom: 20px;">
+          <h4 style="margin: 0 0 10px 0; font-size: 16px;">📚 Related Resources</h4>
+          <div style="space-y: 6px;">
+      `;
+      
+      data.sources.forEach(source => {
+        html += `
+          <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; margin-bottom: 6px;">
+            ${source.url ? 
+              `<a href="${source.url}" target="_blank" style="color: white; text-decoration: underline;">${source.title}</a>` :
+              `<span style="color: white;">${source.title}</span>`
+            }
+            <span style="font-size: 11px; color: rgba(255,255,255,0.7); margin-left: 8px;">${source.type || 'document'}</span>
+          </div>
+        `;
+      });
+      
+      html += `</div></div>`;
+    }
+    
+    // Add AI response
+    if (data.message) {
+      html += `
+        <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;">
+          ${data.message.substring(0, 300)}${data.message.length > 300 ? '...' : ''}
+        </div>
+      `;
+    }
+    
+    overlay.innerHTML = html;
+    document.body.appendChild(overlay);
+    
+    // Add animation style if not exists
+    if (!document.getElementById('ai-training-style')) {
+      const style = document.createElement('style');
+      style.id = 'ai-training-style';
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  },
+
+  // Show simple AI overlay message
+  showAIOverlay: function(message) {
+    const existing = document.getElementById('ai-simple-overlay');
+    if (existing) existing.remove();
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'ai-simple-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 300px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+      z-index: 10000;
+      color: white;
+      padding: 20px;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    overlay.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0; color: white; font-size: 16px;">🤖 AI Assistant</h3>
+        <button onclick="this.closest('#ai-simple-overlay').remove()" 
+                style="background: none; border: none; font-size: 18px; cursor: pointer; color: rgba(255,255,255,0.8);">&times;</button>
+      </div>
+      <div style="font-size: 14px; line-height: 1.4;">${message}</div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (overlay.parentNode) overlay.remove();
+    }, 5000);
+  },
+
+  // Toggle main AI overlay
+  toggleOverlay: function() {
+    const existing = document.getElementById('ai-assistant-overlay');
+    if (existing) {
+      existing.style.display = existing.style.display === 'none' ? 'block' : 'none';
+    } else {
+      this.showAIOverlay('AI Assistant is ready! Use the extension popup to interact.');
+    }
+  }
+};
+
+console.log('🤖 AI Assistant enhanced content script loaded with training recommendations!');

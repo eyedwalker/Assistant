@@ -10,7 +10,7 @@ class EyecareAIAssistant {
   constructor() {
     this.isInitialized = false;
     this.overlayVisible = false;
-    this.apiBaseUrl = 'http://localhost:3000'; // Your AI assistant API
+    this.apiBaseUrl = 'http://localhost:3001'; // Your AI assistant API
     this.contactLensContext = null;
     this.init();
     this.listenForContextUpdates();
@@ -230,19 +230,47 @@ class EyecareAIAssistant {
     const url = window.location.href.toLowerCase();
     const title = document.title.toLowerCase();
     
-    if (url.includes('patient') || title.includes('patient')) {
-      return '👤 Patient Management';
-    } else if (url.includes('appointment') || url.includes('schedule')) {
-      return '📅 Scheduling';
-    } else if (url.includes('billing') || url.includes('claim')) {
-      return '💰 Billing & Claims';
-    } else if (url.includes('inventory') || url.includes('frame')) {
-      return '📦 Inventory';
-    } else if (url.includes('report') || url.includes('analytics')) {
-      return '📊 Reports';
-    } else {
-      return '🏠 Dashboard';
+    if (url.includes('contact') || title.includes('contact')) return 'contact-lens';
+    if (url.includes('appointment') || title.includes('appointment')) return 'appointment';
+    if (url.includes('patient') || title.includes('patient')) return 'patient-management';
+    if (url.includes('order') || title.includes('order')) return 'ordering';
+    if (url.includes('inventory') || title.includes('inventory')) return 'inventory';
+    if (url.includes('billing') || title.includes('billing')) return 'billing';
+    if (url.includes('frame') || title.includes('frame')) return 'frame-selection';
+    if (url.includes('lens') || title.includes('lens')) return 'lens-selection';
+    if (url.includes('insurance') || title.includes('insurance')) return 'insurance';
+    
+    return 'general';
+  }
+
+  detectUserActivity() {
+    // Try to detect what the user is currently doing based on page elements and focus
+    const activeElement = document.activeElement;
+    const forms = document.querySelectorAll('form');
+    const buttons = document.querySelectorAll('button[disabled]');
+    
+    if (activeElement && activeElement.tagName === 'INPUT') {
+      return 'filling-form';
     }
+    
+    if (forms.length > 0) {
+      const visibleForms = Array.from(forms).filter(form => 
+        form.offsetHeight > 0 && form.offsetWidth > 0
+      );
+      if (visibleForms.length > 0) {
+        return 'form-interaction';
+      }
+    }
+    
+    if (buttons.length > 0) {
+      return 'processing-request';
+    }
+    
+    if (document.querySelector('.error, .alert-error, [class*="error"]')) {
+      return 'encountering-error';
+    }
+    
+    return 'browsing';
   }
 
   extractPatientData() {
@@ -355,23 +383,72 @@ class EyecareAIAssistant {
       patientData: this.extractPatientData()
     };
     
-    // Send to backend API for AI processing
+    // Send message to AI Assistant with enhanced page context
+    const enhancedContext = {
+      ...pageContext,
+      url: window.location.href,
+      title: document.title,
+      pageType: this.detectPageType(),
+      activity: this.detectUserActivity(),
+      timestamp: new Date().toISOString()
+    };
+
     try {
-      const response = await fetch('http://localhost:3000/api/chat', {
+      const response = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           message: message,
-          context: pageContext,
-          timestamp: new Date().toISOString()
-        })
+          context: enhancedContext
+        }),
       });
       
       if (response.ok) {
         const result = await response.json();
+        console.log('🎬 Extension received response:', result);
+        console.log('🎬 Videos in response:', result.videos);
+        
+        // Display videos if present
+        if (result.videos && result.videos.length > 0) {
+          console.log('🎥 Rendering videos:', result.videos);
+          let videoHtml = '<div style="margin-bottom: 10px; padding: 10px; background: #EBF8FF; border-radius: 8px; border: 1px solid #90CDF4;">';
+          videoHtml += `<strong style="color: #2563EB;">🎥 Recommended Training Videos (${result.videos.length})</strong><br/>`;
+          
+          result.videos.forEach((video, idx) => {
+            videoHtml += `<div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #E5E7EB;">`;
+            videoHtml += `<a href="${video.link}" target="_blank" style="color: #2563EB; text-decoration: underline; font-weight: 500;">📹 ${video.title}</a><br/>`;
+            videoHtml += `<span style="font-size: 12px; color: #6B7280;">${video.duration || 'Video'} • ${video.relevance || '75%'} relevant</span>`;
+            videoHtml += `</div>`;
+          });
+          
+          videoHtml += '</div>';
+          this.addMessage('assistant', videoHtml);
+        }
+        
+        // Display the main message
         this.addMessage('assistant', result.message || 'I\'m here to help with your eyecare questions!');
+        
+        // Display sources if present
+        if (result.sources && result.sources.length > 0) {
+          console.log('📚 Rendering sources:', result.sources);
+          let sourcesHtml = '<div style="margin-top: 10px; padding: 10px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">';
+          sourcesHtml += '<strong>📚 Related Resources:</strong><br/>';
+          
+          result.sources.forEach((source, idx) => {
+            sourcesHtml += `<div style="margin-top: 4px;">• `;
+            if (source.url) {
+              sourcesHtml += `<a href="${source.url}" target="_blank" style="color: #2563EB; text-decoration: underline;">${source.title || source.url}</a>`;
+            } else {
+              sourcesHtml += source.title;
+            }
+            sourcesHtml += '</div>';
+          });
+          
+          sourcesHtml += '</div>';
+          this.addMessage('assistant', sourcesHtml);
+        }
       } else {
         this.addMessage('assistant', 'I\'m analyzing your question about the current page. How can I help you with eyecare procedures or training?');
       }
@@ -388,16 +465,16 @@ class EyecareAIAssistant {
     
     if (pageType.includes('Patient')) {
       trainingModule = 'Patient Management';
-      trainingUrl = 'http://localhost:3000/training/patient-management';
+      trainingUrl = 'http://localhost:3001/training/patient-management';
     } else if (pageType.includes('Billing')) {
       trainingModule = 'Billing & Claims';
-      trainingUrl = 'http://localhost:3000/training/billing-claims';
+      trainingUrl = 'http://localhost:3001/training/billing-claims';
     } else if (pageType.includes('Scheduling')) {
       trainingModule = 'Appointment Scheduling';
-      trainingUrl = 'http://localhost:3000/training/scheduling';
+      trainingUrl = 'http://localhost:3001/training/scheduling';
     } else {
       trainingModule = 'Eyefinity Administration Fundamentals';
-      trainingUrl = 'http://localhost:3000/training/fundamentals';
+      trainingUrl = 'http://localhost:3001/training/fundamentals';
     }
     
     const messageWithLink = `📚 Based on your current page (${pageType}), I recommend the **${trainingModule}** training module.`;
@@ -797,16 +874,16 @@ class EyecareAIAssistant {
     
     switch (moduleType) {
       case 'patient-management':
-        trainingUrl = 'http://localhost:3000/training/patient-management';
+        trainingUrl = 'http://localhost:3001/training/patient-management';
         break;
       case 'billing-procedures':
-        trainingUrl = 'http://localhost:3000/training/billing-claims';
+        trainingUrl = 'http://localhost:3001/training/billing-claims';
         break;
       case 'browse-all':
-        trainingUrl = 'http://localhost:3000/training';
+        trainingUrl = 'http://localhost:3001/training';
         break;
       default:
-        trainingUrl = 'http://localhost:3000/training';
+        trainingUrl = 'http://localhost:3001/training';
     }
     
     // Open training in new tab

@@ -1,13 +1,114 @@
 // Eyecare AI Assistant - Background Service Worker
 
+// Extension Authentication Module (inlined to avoid importScripts)
+class ExtensionAuth {
+  constructor() {
+    this.apiBaseUrl = 'http://localhost:3001';
+    this.isAuthenticated = false;
+    this.userInfo = null;
+  }
+
+  async checkAuth() {
+    // Simplified for development - skip validation
+    try {
+      const stored = await chrome.storage.sync.get(['authToken', 'userInfo']);
+      
+      if (stored.authToken) {
+        // Skip server validation for dev
+        this.isAuthenticated = true;
+        this.userInfo = stored.userInfo;
+        return true;
+      }
+      
+      this.isAuthenticated = false;
+      return false;
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      return false;
+    }
+  }
+
+  async validateToken(token) {
+    // Disabled for development - always return true
+    return true;
+  }
+
+  async login(email, accessCode) {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/extension/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, accessCode })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success && data.token) {
+          // Store auth info
+          await chrome.storage.sync.set({
+            authToken: data.token,
+            userInfo: {
+              email: data.email,
+              name: data.name,
+              role: data.role,
+              organization: data.organization
+            }
+          });
+          
+          this.isAuthenticated = true;
+          this.userInfo = {
+            email: data.email,
+            name: data.name,
+            role: data.role,
+            organization: data.organization
+          };
+          return { success: true, user: this.userInfo };
+        }
+      }
+      
+      return { success: false, error: 'Invalid credentials' };
+    } catch (error) {
+      console.error('Login failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async logout() {
+    try {
+      await chrome.storage.sync.remove(['authToken', 'userInfo']);
+      this.isAuthenticated = false;
+      this.userInfo = null;
+      return true;
+    } catch (error) {
+      console.error('Logout failed:', error);
+      return false;
+    }
+  }
+
+  getUser() {
+    return this.userInfo;
+  }
+
+  isLoggedIn() {
+    return this.isAuthenticated;
+  }
+}
+
 class BackgroundService {
   constructor() {
-    this.apiBaseUrl = 'http://localhost:3000';
+    this.apiBaseUrl = 'http://localhost:3001';
+    this.auth = new ExtensionAuth();
     this.init();
   }
 
   init() {
     console.log('🤖 Eyecare AI Assistant background service starting...');
+    
+    // Check authentication on startup
+    this.checkAuthStatus();
     
     // Listen for extension installation
     chrome.runtime.onInstalled.addListener((details) => {
@@ -29,19 +130,44 @@ class BackgroundService {
     this.setupContextMenus();
   }
 
+  async checkAuthStatus() {
+    const isAuthenticated = await this.auth.checkAuth();
+    console.log('Auth status:', isAuthenticated ? 'Authenticated' : 'Not authenticated');
+    
+    if (!isAuthenticated) {
+      // Update extension icon to show locked state
+      chrome.action.setIcon({
+        path: {
+          '16': 'icons/icon-locked-16.png',
+          '48': 'icons/icon-locked-48.png',
+          '128': 'icons/icon-locked-128.png'
+        }
+      }).catch(() => {
+        // Fallback if custom icons don't exist
+        chrome.action.setBadgeText({ text: '🔒' });
+      });
+      
+      chrome.action.setTitle({ title: 'Eyecare AI Assistant (Login Required)' });
+    } else {
+      // Update extension icon to show unlocked state
+      chrome.action.setBadgeText({ text: '' });
+      chrome.action.setTitle({ title: 'Eyecare AI Assistant (Active)' });
+    }
+  }
+  
   handleInstallation(details) {
     if (details.reason === 'install') {
       console.log('🎉 Eyecare AI Assistant installed');
       
-      // Open welcome page
+      // Open login page instead of welcome page
       chrome.tabs.create({
-        url: `${this.apiBaseUrl}?welcome=extension`
+        url: chrome.runtime.getURL('login.html')
       });
       
       // Set default settings
       chrome.storage.sync.set({
-        enabled: true,
-        autoAnalyze: true,
+        enabled: false, // Disabled until authenticated
+        autoAnalyze: false,
         showNotifications: true,
         apiUrl: this.apiBaseUrl
       });
@@ -149,8 +275,40 @@ class BackgroundService {
     }
   }
 
-  handleMessage(message, sender, sendResponse) {
+  async handleMessage(message, sender, sendResponse) {
+    // Check authentication for all messages except login
+    if (message.type !== 'LOGIN_SUCCESS' && message.type !== 'CHECK_AUTH') {
+      const isAuthenticated = await this.auth.checkAuth();
+      if (!isAuthenticated) {
+        sendResponse({ 
+          success: false, 
+          error: 'Authentication required',
+          requiresAuth: true 
+        });
+        return;
+      }
+    }
+    
     switch (message.type) {
+      case 'CHECK_AUTH':
+        const authStatus = await this.auth.checkAuth();
+        sendResponse({ 
+          authenticated: authStatus,
+          user: this.auth.getUser()
+        });
+        break;
+        
+      case 'LOGIN_SUCCESS':
+        await this.checkAuthStatus();
+        sendResponse({ success: true });
+        break;
+        
+      case 'LOGOUT':
+        await this.auth.logout();
+        await this.checkAuthStatus();
+        sendResponse({ success: true });
+        break;
+        
       case 'GET_CONTEXT':
         this.getStoredContext(sender.tab.id, sendResponse);
         break;
@@ -318,7 +476,7 @@ class BackgroundService {
       console.log('Price match request from tab:', sender.tab.id, data);
       
       // Forward to price match API
-      const response = await fetch('http://localhost:3000/api/price-match/contact-lens', {
+      const response = await fetch('http://localhost:3001/api/price-match/contact-lens', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

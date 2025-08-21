@@ -30,12 +30,11 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // In a real implementation, you'd have a password field
-          // For now, we'll create a simple check
-          const isValidPassword = await bcrypt.compare(
+          // Check password
+          const isValidPassword = user.password ? await bcrypt.compare(
             credentials.password, 
-            user.email // Temporary - replace with actual password hash
-          );
+            user.password
+          ) : false;
 
           if (!isValidPassword) {
             return null;

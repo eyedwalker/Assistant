@@ -131,6 +131,16 @@ export interface ExtractionResult {
 }
 
 // Chat and AI Assistant Types
+export interface ChatResponse {
+  message: string;
+  confidence: number;
+  sources?: DocumentReference[];
+  sessionId?: string;
+  messageId?: string;
+  followUpQuestions?: string[];
+  processingTime?: number;
+  metadata?: Record<string, any>;
+}
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -211,6 +221,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  password?: string;  // Password hash stored in database
   role: UserRole;
   accessLevel: AccessLevel;
   accessId: string;
