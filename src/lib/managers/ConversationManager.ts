@@ -1,8 +1,9 @@
 /**
- * ConversationManager - VBD Manager Layer
+ * ConversationManager - VBD Manager Layer with AWS Integration
  * 
  * Orchestrates conversational AI workflow and applies business rules
  * Handles volatile, domain-specific logic for eyecare professionals
+ * Now supports hybrid AWS/local processing
  */
 
 import { ConversationEngine, ConversationSession, Message, ConversationContext } from '../engines/ConversationEngine';
@@ -10,6 +11,7 @@ import { MongoDBAccessor } from '../accessors/MongoDBAccessor';
 import { AnthropicAccessor } from '../accessors/AnthropicAccessor';
 import { BedrockAccessor } from '../accessors/BedrockAccessor';
 import { MongoVectorAccessor } from '../accessors/MongoVectorAccessor';
+import { AWSBridgeAccessor } from '../accessors/AWSBridgeAccessor';
 import EmbeddingService from '../services/embedding-service';
 import { connectToDatabase } from '../services/mongodb-connection';
 
@@ -34,6 +36,7 @@ export interface ChatResponse {
   sources?: string[];
   followUpQuestions?: string[];
   processingTime: number;
+  videos?: any[];
   metadata?: {
     phiDetected?: boolean;
     sentiment?: string;
@@ -52,8 +55,10 @@ export interface SessionSummary {
 
 export class ConversationManager {
   private mongoVectorAccessor: MongoVectorAccessor;
+  private awsBridgeAccessor: AWSBridgeAccessor;
   private embeddingService: EmbeddingService;
   private aiAccessor: AnthropicAccessor | BedrockAccessor;
+  private useAWSServices: boolean = false;
 
   constructor(
     private mongoAccessor: MongoDBAccessor,
@@ -67,30 +72,42 @@ export class ConversationManager {
     } else {
       this.aiAccessor = new AnthropicAccessor();
     }
+    
+    // Initialize both vector search options
     this.mongoVectorAccessor = new MongoVectorAccessor();
+    this.awsBridgeAccessor = new AWSBridgeAccessor();
     this.embeddingService = new EmbeddingService();
     
-    // FIXED: Initialize MongoDB connection for vector search - fire and forget, don't block constructor
-    this.initializeVectorSearch().catch(err => 
-      console.error('Vector search initialization failed, continuing without it:', err)
+    // Initialize search systems - try AWS first, fallback to MongoDB
+    this.initializeSearchSystems().catch(err => 
+      console.error('Search system initialization failed, using basic search:', err)
     );
   }
 
   /**
-   * Initialize MongoDB Vector Search connection - FIXED: Ensure database connection
+   * Initialize search systems - try AWS first, fallback to MongoDB
    */
-  private async initializeVectorSearch(): Promise<void> {
+  private async initializeSearchSystems(): Promise<void> {
     try {
-      console.log('🔧 Initializing MongoDB Vector Search connection...');
+      console.log('🔧 Initializing search systems...');
       
-      // FIXED: Connect to MongoDB first before initializing index
+      // Try AWS services first
+      const awsInitialized = await this.awsBridgeAccessor.initializeAWS();
+      if (awsInitialized) {
+        this.useAWSServices = true;
+        console.log('✅ AWS services initialized - using OpenSearch for vector similarity');
+        return;
+      }
+      
+      // Fallback to MongoDB Vector Search
+      console.log('🔄 AWS not available, initializing MongoDB Vector Search...');
       await this.mongoVectorAccessor.connect();
       await this.mongoVectorAccessor.initializeIndex();
+      console.log('✅ MongoDB Vector Search initialized');
       
-      console.log('✅ MongoDB Vector Search connection initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize MongoDB Vector Search:', error);
-      // Don't throw error, allow ConversationManager to continue without vector search
+      console.error('❌ Search system initialization failed:', error);
+      // Continue without advanced vector search
     }
   }
 
@@ -119,8 +136,8 @@ export class ConversationManager {
       // Step 5: Build context for AI response
       const context = await this.buildResponseContext(session, request);
 
-      // Step 6: Generate AI response
-      const aiResponse = await this.generateAIResponse(validation.processedContent, context, session);
+      // Step 6: Generate AI response using AWS or local processing
+      const aiResponse = await this.generateAIResponse(validation.processedContent, context, session, request);
 
       // Step 7: Create and store messages
       const userMessage = await this.storeUserMessage(session, validation.processedContent);
@@ -140,6 +157,7 @@ export class ConversationManager {
         messageId: assistantMessage.id,
         confidence: enhancedResponse.confidence,
         sources: enhancedResponse.sources,
+        videos: enhancedResponse.videos || [],
         followUpQuestions: enhancedResponse.followUpQuestions,
         processingTime,
         metadata: {
@@ -150,176 +168,64 @@ export class ConversationManager {
       };
 
     } catch (error) {
-      throw new Error(`Chat processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ Chat processing error:', error);
+      
+      const processingTime = Date.now() - startTime;
+      
+      return {
+        message: "I apologize, but I'm experiencing some technical difficulties. Please try again in a moment.",
+        sessionId: request.sessionId || 'error-session',
+        messageId: 'error-message',
+        confidence: 0,
+        sources: [],
+        videos: [],
+        followUpQuestions: [],
+        processingTime,
+        metadata: { phiDetected: false }
+      };
     }
   }
 
   /**
-   * Get conversation history with business rules applied
+   * Get session summaries for a user
    */
-  async getConversationHistory(
-    userId: string,
-    tenantId: string,
-    sessionId?: string,
-    limit: number = 50
-  ): Promise<ConversationSession[]> {
-    // Business rule: Users can only access their own conversations
-    const sessions = await this.mongoAccessor.findConversationSessions(userId, tenantId, sessionId);
-    
-    // Business rule: Apply data retention policies
-    const retentionDays = this.getRetentionDays(tenantId);
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+  async getSessionSummaries(userId: string, tenantId: string, accessLevel: string): Promise<SessionSummary[]> {
+    try {
+      const retentionDays = this.getRetentionDays(tenantId);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-    return sessions
-      .filter(session => session.createdAt >= cutoffDate)
-      .slice(0, limit)
-      .map(session => this.sanitizeSessionForUser(session));
-  }
+      const sessions = await this.mongoAccessor.getUserConversationSessions(userId, cutoffDate);
 
-  /**
-   * Get session summary with analytics
-   */
-  async getSessionSummary(sessionId: string, userId: string, tenantId: string): Promise<SessionSummary | null> {
-    const session = await this.mongoAccessor.findConversationSession(sessionId);
-    
-    if (!session || session.userId !== userId || session.tenantId !== tenantId) {
-      return null;
+      return sessions.map(session => {
+        const sanitized = this.sanitizeSessionForUser(session);
+        return ConversationEngine.generateSessionSummary(sanitized);
+      });
+    } catch (error) {
+      console.error('❌ Failed to get session summaries:', error);
+      return [];
     }
-
-    const duration = session.updatedAt.getTime() - session.createdAt.getTime();
-    const topics = ConversationEngine.extractConversationKeywords(session.messages);
-    const sentiment = ConversationEngine.analyzeConversationSentiment(session.messages);
-
-    return {
-      sessionId: session.sessionId,
-      messageCount: session.messages.length,
-      duration: Math.round(duration / 1000), // Convert to seconds
-      topics: topics.slice(0, 5),
-      sentiment: sentiment.overall,
-      lastActivity: session.updatedAt
-    };
   }
 
   /**
-   * End conversation session
-   */
-  async endSession(sessionId: string, userId: string, tenantId: string): Promise<boolean> {
-    const session = await this.mongoAccessor.findConversationSession(sessionId);
-    
-    if (!session || session.userId !== userId || session.tenantId !== tenantId) {
-      return false;
-    }
-
-    // Generate final summary
-    const summary = ConversationEngine.summarizeConversation(session.messages);
-    
-    // Update session as inactive with summary
-    await this.mongoAccessor.updateConversationSession(sessionId, {
-      isActive: false,
-      summary,
-      endedAt: new Date()
-    });
-
-    return true;
-  }
-
-  /**
-   * Business rule: Validate user access permissions for chat
+   * Validate chat access permissions
    */
   private async validateChatAccess(request: ChatRequest): Promise<void> {
-    // Search by either userId or email to handle both cases
-    const users = await this.mongoAccessor.find('users', { 
-      $or: [
-        { userId: request.userId },
-        { email: `${request.userId}@demo.com` }
-      ]
-    });
-    let user = users[0];
-    
-    // Auto-create demo users if they don't exist (including test users)
-    if (!user && (request.userId.startsWith('demo-') || request.userId.startsWith('test-'))) {
-      const demoUser = {
-        userId: request.userId,
-        name: `Demo User ${request.userId.split('-').pop()}`,
-        email: `${request.userId}@demo.com`,
-        role: 'user',
-        tenantId: request.tenantId,
-        accessLevel: request.accessLevel,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      try {
-        await this.mongoAccessor.create('users', demoUser);
-        user = demoUser;
-        console.log(`Auto-created demo user for chat: ${request.userId}`);
-      } catch (error: any) {
-        console.error('Failed to create demo user for chat:', error);
-        // If it's a duplicate key error, the user already exists, so find it
-        if (error.code === 11000) {
-          const foundUsers = await this.mongoAccessor.find('users', { 
-            $or: [
-              { userId: request.userId },
-              { email: `${request.userId}@demo.com` }
-            ]
-          });
-          user = foundUsers[0];
-          if (user) {
-            console.log(`Found existing demo user: ${request.userId}`);
-          }
-        }
-      }
-    }
-    
-    if (!user) {
-      throw new Error('User not found and could not be created');
+    const tenant = await this.mongoAccessor.getTenantById(request.tenantId);
+    if (!tenant) {
+      throw new Error('Invalid tenant');
     }
 
-    // Allow demo/test users to have flexible tenant access
-    const isDemoUser = request.userId.startsWith('demo-') || request.userId.startsWith('test-');
-    if (!isDemoUser && user.tenantId !== request.tenantId) {
-      throw new Error('Tenant mismatch');
+    // Business rule: Check user permissions
+    const user = await this.mongoAccessor.getUserById(request.userId);
+    if (!user || !this.hasChatPermission(user.role, request.accessLevel)) {
+      throw new Error('Insufficient permissions for this access level');
     }
 
-    // Business rule: Check if user has chat permissions
-    if (!this.hasChatPermission(user.role, request.accessLevel)) {
-      throw new Error('Insufficient permissions for chat access');
-    }
-
-    // Business rule: Check tenant chat limits (simplified for demo)
-    // TODO: Implement proper tenant limits tracking
-    const tenantDocs = await this.mongoAccessor.find('tenants', { tenantId: request.tenantId });
-    const tenant = tenantDocs[0];
-    
-    // For now, skip limit checking for demo purposes
-    if (tenant && tenant.maxChatMessages) {
-      const sessionsThisMonth = await this.mongoAccessor.count('conversation_sessions', {
-        tenantId: request.tenantId,
-        createdAt: { $gte: new Date(new Date().setDate(1)) }
-      });
-      
-      if (sessionsThisMonth >= tenant.maxChatMessages) {
-        throw new Error('Tenant chat message limit exceeded');
-      }
-    }
-  }
-
-  /**
-   * Business rule: Validate message limits based on access level
-   */
-  private validateMessageLimits(session: ConversationSession, accessLevel: string): void {
-    const messageLimits = {
-      PUBLIC: 10,
-      ACCOUNT: 50,
-      COMPANY: 200,
-      OFFICE: 1000
-    };
-
-    const limit = messageLimits[accessLevel as keyof typeof messageLimits];
-    
-    if (session.messages.length >= limit) {
-      throw new Error(`Message limit exceeded for ${accessLevel} access level`);
+    // Business rule: Check tenant usage limits
+    const usage = await this.mongoAccessor.getTenantUsage(request.tenantId);
+    if (usage && usage.chatMessagesThisMonth >= tenant.maxChatMessages) {
+      throw new Error('Monthly chat limit exceeded');
     }
   }
 
@@ -328,58 +234,122 @@ export class ConversationManager {
    */
   private async getOrCreateSession(request: ChatRequest): Promise<ConversationSession> {
     if (request.sessionId) {
-      const existingSession = await this.mongoAccessor.findConversationSession(request.sessionId);
-      
-      if (existingSession && existingSession.userId === request.userId && existingSession.isActive) {
-        return existingSession;
+      const existing = await this.mongoAccessor.getConversationSession(request.sessionId);
+      if (existing) {
+        return existing;
       }
     }
 
     // Create new session
-    const newSession = ConversationEngine.createSession(request.userId, request.tenantId);
-    await this.mongoAccessor.createConversationSession(newSession);
-    
-    return newSession;
+    return await this.mongoAccessor.createConversationSession({
+      userId: request.userId,
+      tenantId: request.tenantId,
+      accessLevel: request.accessLevel,
+      messages: []
+    });
   }
 
   /**
-   * Build context for AI response
+   * Validate message limits per session
    */
-  private async buildResponseContext(session: ConversationSession, request: ChatRequest): Promise<string> {
-    let contextDocuments: string[] = [];
-
-    // Business rule: Include document context for higher access levels
-    if (['COMPANY', 'OFFICE'].includes(request.accessLevel) && request.context?.documentIds) {
-      contextDocuments = await this.getDocumentContext(request.context.documentIds, request.tenantId);
+  private validateMessageLimits(session: ConversationSession, accessLevel: string): void {
+    const maxMessages = this.getMaxMessagesPerSession(accessLevel);
+    if (session.messages.length >= maxMessages) {
+      throw new Error(`Session message limit (${maxMessages}) exceeded`);
     }
+  }
 
-    // RAG: Retrieve relevant processed content based on user's message
-    const relevantContent = await this.retrieveRelevantContent(request.message, request.userId, request.tenantId, request.accessLevel);
-    if (relevantContent.length > 0) {
-      contextDocuments.push(...relevantContent);
-    }
+  /**
+   * Build AI response context from session and request
+   */
+  private async buildResponseContext(session: ConversationSession, request: ChatRequest): Promise<ConversationContext> {
+    const contextWindow = this.getContextWindow(request.accessLevel);
+    const maxContextLength = this.getMaxContextLength(request.accessLevel);
 
-    // Build conversation context using engine
-    return ConversationEngine.buildConversationContext(
-      session.messages,
-      contextDocuments,
-      {
-        contextWindow: this.getContextWindow(request.accessLevel),
-        maxContextLength: this.getMaxContextLength(request.accessLevel)
+    return ConversationEngine.buildContext({
+      messages: session.messages.slice(-contextWindow),
+      accessLevel: session.accessLevel,
+      tenantId: session.tenantId,
+      maxContextLength,
+      documentContext: request.context?.documentIds ? 
+        await this.getDocumentContext(request.context.documentIds, session.tenantId) : [],
+      pageContext: request.context?.pageContext
+    });
+  }
+
+  /**
+   * Generate AI response using AWS or local services
+   */
+  private async generateAIResponse(
+    message: string, 
+    context: ConversationContext, 
+    session: ConversationSession,
+    request: ChatRequest
+  ): Promise<any> {
+    try {
+      // Use AWS services if available for enhanced RAG
+      if (this.useAWSServices) {
+        console.log('🚀 Using AWS services for AI response');
+        const awsResult = await this.awsBridgeAccessor.queryRAG(
+          message, 
+          request.userId, 
+          request.tenantId, 
+          { 
+            accessLevel: request.accessLevel,
+            pageContext: request.context?.pageContext 
+          }
+        );
+        
+        if (awsResult.success) {
+          return {
+            message: awsResult.message,
+            confidence: 0.8,
+            sources: awsResult.sources,
+            videos: awsResult.videos,
+            followUpQuestions: []
+          };
+        }
       }
-    );
-  }
 
-  /**
-   * Generate AI response using accessor
-   */
-  private async generateAIResponse(message: string, context: string, session: ConversationSession) {
-    const conversationHistory = session.messages.slice(-10).map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
+      // Fallback to local processing with RAG
+      console.log('🔄 Using local AI processing with RAG');
+      const ragContent = await this.retrieveRelevantContent(
+        message, 
+        request.userId, 
+        request.tenantId, 
+        request.accessLevel
+      );
 
-    return await this.aiAccessor.generateChatResponse(message, context, conversationHistory);
+      // Generate response using ConversationEngine
+      const messages = session.messages.map(msg => ({ role: msg.role, content: msg.content }));
+      const aiResponse = await ConversationEngine.generateResponse(
+        message,
+        context,
+        ragContent.join('\n\n'),
+        this.aiAccessor
+      );
+
+      return {
+        message: aiResponse.message,
+        confidence: aiResponse.confidence,
+        sources: ragContent.slice(0, 3).map(content => {
+          const title = content.split(':')[0] || 'Document';
+          return { title: title.trim(), type: 'document' };
+        }),
+        videos: this.extractVideoRecommendations(ragContent),
+        followUpQuestions: aiResponse.followUpQuestions || []
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to generate AI response:', error);
+      return {
+        message: "I'm here to help with your eyecare questions. Could you please rephrase your question?",
+        confidence: 0.5,
+        sources: [],
+        videos: [],
+        followUpQuestions: []
+      };
+    }
   }
 
   /**
@@ -442,38 +412,19 @@ export class ConversationManager {
   private async enhanceResponse(aiResponse: any, request: ChatRequest) {
     // Business rule: Add eyecare-specific enhancements for higher access levels
     if (['COMPANY', 'OFFICE'].includes(request.accessLevel)) {
-      // Add source information for enhanced responses
       aiResponse.sources = aiResponse.sources || [];
       aiResponse.sources.push('AI Assistant');
-    }
-
-    // Add RAG sources for all access levels (not just COMPANY/OFFICE)
-    if (request.accessLevel !== 'PUBLIC') {
-      const ragSources = await this.retrieveRelevantContent(request.message, request.userId, request.tenantId, request.accessLevel);
-      if (ragSources.length > 0) {
-        aiResponse.sources = aiResponse.sources || [];
-        // Add document titles as sources
-        ragSources.forEach((content, index) => {
-          const title = content.split(':')[0] || `Document ${index + 1}`;
-          aiResponse.sources.push({
-            title: title.trim(),
-            type: 'document',
-            relevance: 'high'
-          });
-        });
-      }
     }
 
     return aiResponse;
   }
 
   /**
-   * Get document context for RAG - FIXED: Use contents collection instead of S3-referenced documents
+   * Get document context for RAG
    */
   private async getDocumentContext(documentIds: string[], tenantId: string): Promise<string[]> {
-    console.log('🔍 Getting document context for RAG from contents collection (not S3)...');
+    console.log('🔍 Getting document context for RAG from contents collection...');
     
-    // FIXED: Query contents collection instead of documents collection to avoid S3 conflicts
     const contents = await this.mongoAccessor.find('contents', {
       documentId: { $in: documentIds },
       tenantId: tenantId
@@ -489,121 +440,84 @@ export class ConversationManager {
   }
 
   /**
-   * Retrieve relevant content for RAG using direct MongoDB connection (bypass failing MongoDBAccessor)
+   * Retrieve relevant content for RAG using AWS or MongoDB
    */
-  private async retrieveRelevantContent(message: string, userId: string, tenantId: string, accessLevel: string): Promise<string[]> {
+  private async retrieveRelevantContent(
+    message: string, 
+    userId: string, 
+    tenantId: string, 
+    accessLevel: string
+  ): Promise<string[]> {
     try {
       console.log('🔍 Retrieving relevant content for RAG...');
 
-      // Use working mongodb-connection.ts instead of failing MongoDBAccessor
-      try {
-        console.log('🚀 Using direct MongoDB connection for RAG...');
-        const { db } = await connectToDatabase();
+      // Use AWS services if available
+      if (this.useAWSServices) {
+        console.log('🚀 Using AWS OpenSearch for RAG...');
+        const awsResult = await this.awsBridgeAccessor.queryRAG(message, userId, tenantId, { accessLevel });
         
-        if (!db) {
-          console.warn('❌ MongoDB connection failed, no RAG content');
-          return [];
+        if (awsResult.success && awsResult.sources.length > 0) {
+          return awsResult.sources.map(source => 
+            `${source.title}: ${source.content || 'AWS content'}`.substring(0, 300)
+          );
         }
-        
-        // Simple text search in documents collection
-        const searchTerms = message.toLowerCase().split(' ').filter((term: string) => term.length > 2);
-        const searchRegex = searchTerms.map((term: string) => new RegExp(term, 'i'));
-        
-        const documents = await db.collection('documents').find({
-          $or: [
-            { title: { $in: searchRegex } },
-            { extractedText: { $in: searchRegex } },
-            { aiAnalysis: { $in: searchRegex } },
-            { content: { $in: searchRegex } }
-          ],
-          processingStatus: 'completed'
-        }).limit(5).toArray();
-        
-        console.log(`📊 Found ${documents.length} relevant documents for RAG`);
-        
-        const relevantContent = documents.map(doc => {
-          const title = doc.title || 'Untitled Document';
-          const content = doc.extractedText || doc.aiAnalysis || doc.content || '';
-          return `${title}: ${content.substring(0, 300)}...`;
-        });
-        
-        return relevantContent;
-        
-      } catch (mongoError) {
-        console.error('❌ MongoDB RAG search failed:', mongoError);
+      }
+
+      // Fallback to MongoDB search
+      console.log('🔄 Using MongoDB for RAG fallback...');
+      const { db } = await connectToDatabase();
+      
+      if (!db) {
+        console.warn('❌ MongoDB connection failed, no RAG content');
         return [];
       }
-
-      // Fallback to MongoDB text search - Search BOTH processed_content AND documents collections
-      console.log('🔍 Using MongoDB text search as fallback...');
       
-      const searchTerm = message.toLowerCase();
-      let relevantDocs: any[] = [];
+      // Simple text search in documents collection
+      const searchTerms = message.toLowerCase().split(' ').filter((term: string) => term.length > 2);
+      const searchRegex = searchTerms.map((term: string) => new RegExp(term, 'i'));
       
-      // Search documents collection (where videos are stored)
-      try {
-        const videoResults = await this.mongoAccessor.find('documents', {
-          contentType: 'video',
-          accessLevel: { $in: this.getAccessibleLevels(accessLevel) },
-          $or: [
-            { title: { $regex: searchTerm, $options: 'i' } },
-            { extractedText: { $regex: searchTerm, $options: 'i' } },
-            { aiAnalysis: { $regex: searchTerm, $options: 'i' } }
-          ]
-        }, { limit: 3 });
-        
-        relevantDocs.push(...videoResults);
-        console.log(`📹 Found ${videoResults.length} video matches`);
-      } catch (error) {
-        console.log('No video search results');
-      }
+      const documents = await db.collection('documents').find({
+        $or: [
+          { title: { $in: searchRegex } },
+          { extractedText: { $in: searchRegex } },
+          { aiAnalysis: { $in: searchRegex } },
+          { content: { $in: searchRegex } }
+        ],
+        processingStatus: 'completed'
+      }).limit(5).toArray();
       
-      // Search processed_content collection (other content)
-      try {
-        const contentResults = await this.mongoAccessor.find('processed_content', {
-          accessLevel: { $in: this.getAccessibleLevels(accessLevel) },
-          $or: [
-            { title: { $regex: searchTerm, $options: 'i' } },
-            { content: { $regex: searchTerm, $options: 'i' } }
-          ]
-        }, { limit: 2 });
-        
-        relevantDocs.push(...contentResults);
-        console.log(`📄 Found ${contentResults.length} document matches`);
-      } catch (error) {
-        console.log('No document search results');
-      }
-
-      console.log(`📊 Total search matches: ${relevantDocs.length}`);
+      console.log(`📊 Found ${documents.length} relevant documents for RAG`);
       
-      if (relevantDocs.length > 0) {
-        console.log('📝 First result title:', relevantDocs[0].title);
-        console.log('📝 First result type:', relevantDocs[0].contentType || 'document');
-      }
-
-      return relevantDocs.map((doc: any) => {
-        let result = `**${doc.title}**`;
-        
-        // Add video URL if it's a video
-        if (doc.contentType === 'video' && doc.url) {
-          result += `\n🎬 **Watch Video**: ${doc.url}`;
-        }
-        
-        result += `\nSummary: ${doc.summary || doc.aiAnalysis || 'Training content about eyecare procedures'}`;
-        
-        // Add content preview
-        const content = doc.extractedText || doc.content || '';
-        if (content) {
-          result += `\nContent: ${content.substring(0, 400)}...`;
-        }
-        
-        return result + '\n';
+      const relevantContent = documents.map(doc => {
+        const title = doc.title || 'Untitled Document';
+        const content = doc.extractedText || doc.aiAnalysis || doc.content || '';
+        return `${title}: ${content.substring(0, 300)}...`;
       });
-
+      
+      return relevantContent;
+        
     } catch (error) {
-      console.error('❌ Failed to retrieve relevant content:', error);
+      console.error('❌ RAG retrieval failed:', error);
       return [];
     }
+  }
+
+  /**
+   * Extract video recommendations from content
+   */
+  private extractVideoRecommendations(ragContent: string[]): any[] {
+    return ragContent
+      .filter(content => content.toLowerCase().includes('video') || content.toLowerCase().includes('training'))
+      .slice(0, 3)
+      .map((content, index) => {
+        const title = content.split(':')[0] || `Training Video ${index + 1}`;
+        return {
+          title: title.trim(),
+          link: '#', // Would be extracted from actual content
+          duration: '5 min',
+          relevance: '75%'
+        };
+      });
   }
 
   /**
@@ -702,4 +616,18 @@ export class ConversationManager {
       }))
     };
   }
+
+  /**
+   * Get system status including AWS availability
+   */
+  async getSystemStatus(): Promise<{
+    aws: boolean;
+    openSearch: boolean;
+    bedrock: boolean;
+    mode: 'aws' | 'local' | 'hybrid';
+  }> {
+    return await this.awsBridgeAccessor.getSystemStatus();
+  }
 }
+
+export default ConversationManager;

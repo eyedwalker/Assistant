@@ -1,0 +1,791 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Eyecare AI Assistant - AWS Multimodal RAG Infrastructure'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'eyecare-ai'
+    Description: 'Name for the project resources'
+  
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: [dev, staging, prod]
+    Description: 'Deployment environment'
+
+Resources:
+  # S3 Bucket for eyecare content storage
+  ContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-content-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ProcessingLambda.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt VideoProcessingLambda.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .mp4
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt VideoProcessingLambda.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .mov
+
+  # OpenSearch Domain for vector storage with eyecare-specific configuration
+  OpenSearchDomain:
+    Type: AWS::OpenSearch::Domain
+    Properties:
+      DomainName: !Sub '${ProjectName}-search-${Environment}'
+      EngineVersion: 'OpenSearch_2.3'
+      ClusterConfig:
+        InstanceType: 't3.small.search'
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: 'gp3'
+        VolumeSize: 20
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'es:*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ProjectName}-search-${Environment}/*'
+      AdvancedSecurityOptions:
+        Enabled: false
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+      AdvancedOptions:
+        'rest.action.multi.allow_explicit_index': 'true'
+
+  # Lambda Layer for shared dependencies
+  SharedLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub '${ProjectName}-shared-layer'
+      Description: 'Shared dependencies for eyecare AI processing'
+      Content:
+        S3Bucket: !Ref ContentBucket
+        S3Key: layers/shared-dependencies.zip
+      CompatibleRuntimes:
+        - python3.11
+        - python3.10
+
+  # Main document processing Lambda
+  ProcessingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-processor-${Environment}'
+      Runtime: python3.11
+      Handler: document_processor.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          def lambda_handler(event, context):
+              print(f"Processing event: {json.dumps(event)}")
+              
+              s3_client = boto3.client('s3')
+              textract_client = boto3.client('textract')
+              bedrock_client = boto3.client('bedrock-runtime')
+              opensearch_client = boto3.client('opensearch')
+              
+              results = []
+              
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  
+                  try:
+                      print(f"Processing file: {bucket}/{key}")
+                      
+                      # Get file metadata
+                      obj_metadata = s3_client.head_object(Bucket=bucket, Key=key)
+                      file_size = obj_metadata['ContentLength']
+                      
+                      # Extract content based on file type
+                      if key.lower().endswith(('.pdf')):
+                          content = extract_pdf_content(textract_client, bucket, key)
+                      elif key.lower().endswith(('.docx', '.doc')):
+                          content = extract_document_content(s3_client, bucket, key)
+                      elif key.lower().endswith(('.txt')):
+                          content = extract_text_content(s3_client, bucket, key)
+                      else:
+                          print(f"Unsupported file type: {key}")
+                          continue
+                      
+                      # Generate embeddings and store in OpenSearch
+                      if content:
+                          embedding_result = generate_and_store_embeddings(
+                              bedrock_client, opensearch_client, content, key, bucket
+                          )
+                          results.append({
+                              'file': key,
+                              'status': 'success',
+                              'content_length': len(content),
+                              'embedding_stored': embedding_result
+                          })
+                      
+                  except Exception as e:
+                      print(f"Error processing {key}: {str(e)}")
+                      results.append({
+                          'file': key,
+                          'status': 'error',
+                          'error': str(e)
+                      })
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Processing complete',
+                      'results': results,
+                      'processed_files': len(results)
+                  })
+              }
+          
+          def extract_pdf_content(textract_client, bucket, key):
+              """Extract text from PDF using AWS Textract"""
+              try:
+                  response = textract_client.detect_document_text(
+                      Document={'S3Object': {'Bucket': bucket, 'Name': key}}
+                  )
+                  
+                  text = ""
+                  for item in response['Blocks']:
+                      if item['BlockType'] == 'LINE':
+                          text += item['Text'] + "\n"
+                  
+                  return text
+              except Exception as e:
+                  print(f"Textract error: {e}")
+                  return None
+          
+          def extract_document_content(s3_client, bucket, key):
+              """Extract text from Word documents"""
+              # Placeholder for document extraction
+              return "Document content extraction placeholder"
+          
+          def extract_text_content(s3_client, bucket, key):
+              """Extract plain text content"""
+              try:
+                  response = s3_client.get_object(Bucket=bucket, Key=key)
+                  return response['Body'].read().decode('utf-8')
+              except Exception as e:
+                  print(f"Text extraction error: {e}")
+                  return None
+          
+          def generate_and_store_embeddings(bedrock_client, opensearch_client, content, key, bucket):
+              """Generate embeddings using Bedrock and store in OpenSearch"""
+              try:
+                  # Generate embeddings using Bedrock Titan
+                  model_id = "amazon.titan-embed-text-v1"
+                  
+                  # Chunk content for better embedding quality
+                  chunks = chunk_text(content, max_length=1000)
+                  
+                  for i, chunk in enumerate(chunks):
+                      embedding_response = bedrock_client.invoke_model(
+                          modelId=model_id,
+                          body=json.dumps({"inputText": chunk})
+                      )
+                      
+                      embedding_data = json.loads(embedding_response['body'].read())
+                      embedding_vector = embedding_data['embedding']
+                      
+                      # Store in OpenSearch
+                      doc = {
+                          'content': chunk,
+                          'embedding': embedding_vector,
+                          'source_file': key,
+                          'bucket': bucket,
+                          'chunk_index': i,
+                          'content_type': 'document',
+                          'timestamp': datetime.utcnow().isoformat(),
+                          'eyecare_category': classify_eyecare_content(chunk)
+                      }
+                      
+                      # Index in OpenSearch (placeholder - needs proper OpenSearch client setup)
+                      print(f"Would store embedding for chunk {i} of {key}")
+                  
+                  return True
+              except Exception as e:
+                  print(f"Embedding generation error: {e}")
+                  return False
+          
+          def chunk_text(text, max_length=1000):
+              """Split text into chunks for better embedding quality"""
+              words = text.split()
+              chunks = []
+              current_chunk = []
+              current_length = 0
+              
+              for word in words:
+                  if current_length + len(word) + 1 <= max_length:
+                      current_chunk.append(word)
+                      current_length += len(word) + 1
+                  else:
+                      if current_chunk:
+                          chunks.append(' '.join(current_chunk))
+                      current_chunk = [word]
+                      current_length = len(word)
+              
+              if current_chunk:
+                  chunks.append(' '.join(current_chunk))
+              
+              return chunks
+          
+          def classify_eyecare_content(content):
+              """Classify content into eyecare categories"""
+              content_lower = content.lower()
+              
+              if any(term in content_lower for term in ['patient', 'appointment', 'scheduling']):
+                  return 'patient_management'
+              elif any(term in content_lower for term in ['billing', 'insurance', 'claim']):
+                  return 'billing_claims'
+              elif any(term in content_lower for term in ['contact', 'lens', 'prescription']):
+                  return 'contact_lens'
+              elif any(term in content_lower for term in ['exam', 'vision', 'refraction']):
+                  return 'clinical'
+              else:
+                  return 'general'
+
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT: !GetAtt OpenSearchDomain.DomainEndpoint
+          S3_BUCKET: !Ref ContentBucket
+          ENVIRONMENT: !Ref Environment
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 900
+      MemorySize: 1024
+      Layers:
+        - !Ref SharedLayer
+
+  # Video processing Lambda for Vimeo integration
+  VideoProcessingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-video-processor-${Environment}'
+      Runtime: python3.11
+      Handler: video_processor.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          def lambda_handler(event, context):
+              print(f"Processing video event: {json.dumps(event)}")
+              
+              transcribe_client = boto3.client('transcribe')
+              rekognition_client = boto3.client('rekognition')
+              s3_client = boto3.client('s3')
+              
+              results = []
+              
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  
+                  try:
+                      # Start transcription job
+                      job_name = f"eyecare-video-{key.replace('/', '-').replace('.', '-')}"
+                      transcription_result = start_video_transcription(
+                          transcribe_client, bucket, key, job_name
+                      )
+                      
+                      # Extract video frames for visual analysis
+                      frame_analysis = analyze_video_frames(
+                          rekognition_client, bucket, key
+                      )
+                      
+                      results.append({
+                          'file': key,
+                          'transcription_job': job_name,
+                          'frame_analysis': frame_analysis,
+                          'status': 'processing'
+                      })
+                      
+                  except Exception as e:
+                      print(f"Error processing video {key}: {str(e)}")
+                      results.append({
+                          'file': key,
+                          'status': 'error',
+                          'error': str(e)
+                      })
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Video processing initiated',
+                      'results': results
+                  })
+              }
+          
+          def start_video_transcription(transcribe_client, bucket, key, job_name):
+              """Start AWS Transcribe job for video"""
+              try:
+                  response = transcribe_client.start_transcription_job(
+                      TranscriptionJobName=job_name,
+                      Media={'MediaFileUri': f's3://{bucket}/{key}'},
+                      MediaFormat='mp4',
+                      LanguageCode='en-US',
+                      Settings={
+                          'ShowSpeakerLabels': True,
+                          'MaxSpeakerLabels': 5
+                      }
+                  )
+                  return response['TranscriptionJob']['TranscriptionJobName']
+              except Exception as e:
+                  print(f"Transcription error: {e}")
+                  return None
+          
+          def analyze_video_frames(rekognition_client, bucket, key):
+              """Analyze video frames with Rekognition"""
+              try:
+                  # Start label detection job
+                  response = rekognition_client.start_label_detection(
+                      Video={'S3Object': {'Bucket': bucket, 'Name': key}},
+                      MinConfidence=70.0
+                  )
+                  return response['JobId']
+              except Exception as e:
+                  print(f"Rekognition error: {e}")
+                  return None
+
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT: !GetAtt OpenSearchDomain.DomainEndpoint
+          S3_BUCKET: !Ref ContentBucket
+          ENVIRONMENT: !Ref Environment
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 900
+      MemorySize: 1024
+
+  # Query processing Lambda
+  QueryLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-query-${Environment}'
+      Runtime: python3.11
+      Handler: query_processor.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          def lambda_handler(event, context):
+              try:
+                  # Parse the incoming request
+                  if 'body' in event:
+                      body = json.loads(event['body'])
+                  else:
+                      body = event
+                  
+                  query = body.get('query', '')
+                  context = body.get('context', {})
+                  
+                  if not query:
+                      return {
+                          'statusCode': 400,
+                          'headers': get_cors_headers(),
+                          'body': json.dumps({'error': 'Query is required'})
+                      }
+                  
+                  # Initialize AWS clients
+                  bedrock_client = boto3.client('bedrock-runtime')
+                  opensearch_client = boto3.client('opensearch')
+                  
+                  # Generate query embedding
+                  query_embedding = generate_query_embedding(bedrock_client, query)
+                  
+                  # Search for relevant content in OpenSearch
+                  search_results = search_similar_content(opensearch_client, query_embedding)
+                  
+                  # Generate response using Bedrock with retrieved context
+                  ai_response = generate_ai_response(bedrock_client, query, search_results, context)
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': get_cors_headers(),
+                      'body': json.dumps({
+                          'query': query,
+                          'message': ai_response,
+                          'sources': search_results[:5],  # Return top 5 sources
+                          'videos': extract_video_recommendations(search_results),
+                          'timestamp': context.get('timestamp', ''),
+                          'success': True
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Query processing error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': get_cors_headers(),
+                      'body': json.dumps({'error': str(e), 'success': False})
+                  }
+          
+          def get_cors_headers():
+              """Return CORS headers for browser compatibility"""
+              return {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+              }
+          
+          def generate_query_embedding(bedrock_client, query):
+              """Generate embedding for the query"""
+              try:
+                  model_id = "amazon.titan-embed-text-v1"
+                  response = bedrock_client.invoke_model(
+                      modelId=model_id,
+                      body=json.dumps({"inputText": query})
+                  )
+                  
+                  embedding_data = json.loads(response['body'].read())
+                  return embedding_data['embedding']
+              except Exception as e:
+                  print(f"Query embedding error: {e}")
+                  return None
+          
+          def search_similar_content(opensearch_client, query_embedding):
+              """Search for similar content using vector similarity"""
+              # Placeholder for OpenSearch vector search
+              # This would use the k-NN search functionality
+              return [
+                  {
+                      'title': 'Patient Management Best Practices',
+                      'content': 'Sample content about patient management...',
+                      'source': 'training-manual.pdf',
+                      'relevance': '85%'
+                  }
+              ]
+          
+          def generate_ai_response(bedrock_client, query, search_results, context):
+              """Generate AI response using Bedrock Claude with RAG context"""
+              try:
+                  # Build context from search results
+                  rag_context = ""
+                  for result in search_results[:3]:  # Use top 3 results
+                      rag_context += f"Source: {result.get('title', 'Unknown')}\n"
+                      rag_context += f"Content: {result.get('content', '')}\n\n"
+                  
+                  # Create prompt for Bedrock Claude
+                  prompt = f"""You are an expert eyecare assistant helping with Eyefinity practice management.
+                  
+User Query: {query}
+
+Relevant Information:
+{rag_context}
+
+Page Context: {json.dumps(context, indent=2)}
+
+Please provide a helpful response based on the relevant information and context. Focus on practical, actionable advice for eyecare professionals."""
+                  
+                  # Call Bedrock Claude
+                  model_id = "anthropic.claude-3-5-sonnet-20240620-v1:0"
+                  response = bedrock_client.invoke_model(
+                      modelId=model_id,
+                      body=json.dumps({
+                          "anthropic_version": "bedrock-2023-05-31",
+                          "max_tokens": 1000,
+                          "messages": [
+                              {
+                                  "role": "user",
+                                  "content": prompt
+                              }
+                          ]
+                      })
+                  )
+                  
+                  response_data = json.loads(response['body'].read())
+                  return response_data['content'][0]['text']
+                  
+              except Exception as e:
+                  print(f"AI response error: {e}")
+                  return "I'm here to help with your eyecare questions. Please try rephrasing your question."
+          
+          def extract_video_recommendations(search_results):
+              """Extract video recommendations from search results"""
+              videos = []
+              for result in search_results:
+                  if 'video' in result.get('content_type', ''):
+                      videos.append({
+                          'title': result.get('title', 'Training Video'),
+                          'link': result.get('url', '#'),
+                          'duration': result.get('duration', '5 min'),
+                          'relevance': result.get('relevance', '75%')
+                      })
+              return videos[:3]  # Return top 3 videos
+
+      Environment:
+        Variables:
+          OPENSEARCH_ENDPOINT: !GetAtt OpenSearchDomain.DomainEndpoint
+          S3_BUCKET: !Ref ContentBucket
+          ENVIRONMENT: !Ref Environment
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 30
+      MemorySize: 512
+
+  # IAM Role for Lambda functions
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: EyecareAIPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: 
+                  - !Sub '${ContentBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref ContentBucket
+              - Effect: Allow
+                Action:
+                  - textract:DetectDocumentText
+                  - textract:AnalyzeDocument
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - rekognition:StartLabelDetection
+                  - rekognition:GetLabelDetection
+                  - comprehend:DetectEntities
+                  - comprehend:DetectSentiment
+                  - bedrock:InvokeModel
+                  - bedrock:ListModels
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - es:ESHttpGet
+                  - es:ESHttpPut
+                  - es:ESHttpPost
+                  - es:ESHttpDelete
+                Resource: 
+                  - !Sub '${OpenSearchDomain.Arn}'
+                  - !Sub '${OpenSearchDomain.Arn}/*'
+
+  # Lambda permissions for S3 triggers
+  S3InvokePermissionDocuments:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProcessingLambda
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub '${ContentBucket}/*'
+
+  S3InvokePermissionVideos:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref VideoProcessingLambda
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub '${ContentBucket}/*'
+
+  # API Gateway for query endpoints
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-api-${Environment}'
+      Description: 'API for Eyecare AI Assistant queries'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # CORS OPTIONS method
+  OptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !GetAtt ApiGateway.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Query resource
+  QueryResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'query'
+
+  # Query POST method
+  QueryMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref QueryResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QueryLambda.Arn}/invocations'
+
+  # Query OPTIONS method
+  QueryOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref QueryResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Lambda permission for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref QueryLambda
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  # API Gateway deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - QueryMethod
+      - QueryOptionsMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref Environment
+
+  # CloudWatch Log Groups
+  ProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProcessingLambda}'
+      RetentionInDays: 14
+
+  VideoProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${VideoProcessingLambda}'
+      RetentionInDays: 14
+
+  QueryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${QueryLambda}'
+      RetentionInDays: 14
+
+Outputs:
+  S3Bucket:
+    Description: 'S3 bucket for eyecare content storage'
+    Value: !Ref ContentBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-bucket'
+
+  OpenSearchEndpoint:
+    Description: 'OpenSearch domain endpoint for vector search'
+    Value: !Sub 'https://${OpenSearchDomain.DomainEndpoint}'
+    Export:
+      Name: !Sub '${AWS::StackName}-opensearch'
+
+  ApiEndpoint:
+    Description: 'API Gateway endpoint for AI queries'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-api'
+
+  ProcessingLambdaArn:
+    Description: 'Processing Lambda function ARN'
+    Value: !GetAtt ProcessingLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-processing-lambda'
+
+  QueryLambdaArn:
+    Description: 'Query Lambda function ARN'  
+    Value: !GetAtt QueryLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-query-lambda'
+
+  VideoProcessingLambdaArn:
+    Description: 'Video Processing Lambda function ARN'
+    Value: !GetAtt VideoProcessingLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-video-lambda'

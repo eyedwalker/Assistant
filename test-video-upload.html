@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - Video Upload Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f7;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1d1d1f;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .upload-section {
+            border: 2px dashed #007aff;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: #f8f9ff;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007aff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #8e8e93;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007aff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .test-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #d2d2d7;
+        }
+        .test-query {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 AI Assistant Video Training</h1>
+        
+        <div class="upload-section">
+            <h2>📹 Upload Training Video</h2>
+            <p>Upload eyecare training videos to enhance the AI's knowledge base</p>
+            
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="videoFile">Video File (MP4, WebM, MOV, AVI)</label>
+                    <input type="file" id="videoFile" name="video" accept="video/*" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="title">Video Title</label>
+                    <input type="text" id="title" name="title" placeholder="e.g., Contact Lens Care Basics" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="category">Category</label>
+                    <select id="category" name="category">
+                        <option value="training">Training</option>
+                        <option value="documentation">Documentation</option>
+                        <option value="reference">Reference</option>
+                        <option value="policy">Policy</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="accessLevel">Access Level</label>
+                    <select id="accessLevel" name="accessLevel">
+                        <option value="PUBLIC">Public</option>
+                        <option value="ACCOUNT">Account</option>
+                        <option value="COMPANY">Company</option>
+                        <option value="OFFICE">Office</option>
+                    </select>
+                </div>
+                
+                <button type="submit" id="uploadBtn">Upload & Process Video</button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing video... This may take a few minutes.</p>
+        </div>
+
+        <div class="result" id="result"></div>
+
+        <div class="test-section">
+            <h2>🤖 Test AI Knowledge</h2>
+            <p>Ask questions about eyecare topics to see how the AI uses uploaded video content:</p>
+            
+            <div class="test-query">
+                <div class="form-group">
+                    <label for="testQuery">Test Query</label>
+                    <input type="text" id="testQuery" placeholder="How do I properly care for contact lenses?" value="How do I properly care for contact lenses?">
+                </div>
+                <button onclick="testAI()" id="testBtn">Test AI Response</button>
+            </div>
+            
+            <div class="result" id="aiResult"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const videoFile = document.getElementById('videoFile').files[0];
+            const title = document.getElementById('title').value;
+            const category = document.getElementById('category').value;
+            const accessLevel = document.getElementById('accessLevel').value;
+            
+            formData.append('video', videoFile);
+            formData.append('title', title);
+            formData.append('category', category);
+            formData.append('accessLevel', accessLevel);
+            formData.append('tenantId', 'demo-tenant');
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('uploadBtn').disabled = true;
+            
+            try {
+                const response = await fetch('/api/upload-video', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('uploadBtn').disabled = false;
+                
+                // Show result
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                
+                if (result.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>✅ Video Processed Successfully!</h3>
+                        <p><strong>Video ID:</strong> ${result.videoId}</p>
+                        <p><strong>Duration:</strong> ${Math.round(result.processing.duration)} seconds</p>
+                        <p><strong>Transcript Length:</strong> ${result.processing.transcriptLength} characters</p>
+                        <p><strong>Key Topics:</strong> ${result.processing.keyTopics.join(', ')}</p>
+                        <p><strong>Vector Store:</strong> ${result.ragIntegration.vectorStoreType}</p>
+                        <p>The AI can now answer questions using this video content!</p>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>❌ Upload Failed</h3>
+                        <p>${result.error}</p>
+                        <p><strong>Details:</strong> ${result.details || 'Unknown error'}</p>
+                    `;
+                }
+                
+            } catch (error) {
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('uploadBtn').disabled = false;
+                
+                // Show error
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Network Error</h3>
+                    <p>Failed to upload video: ${error.message}</p>
+                `;
+            }
+        });
+
+        async function testAI() {
+            const query = document.getElementById('testQuery').value;
+            if (!query.trim()) return;
+            
+            document.getElementById('testBtn').disabled = true;
+            document.getElementById('testBtn').textContent = 'Testing...';
+            
+            try {
+                const response = await fetch('/api/test-bedrock-rag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: query })
+                });
+                
+                const result = await response.json();
+                
+                const aiResultDiv = document.getElementById('aiResult');
+                aiResultDiv.style.display = 'block';
+                
+                if (result.success) {
+                    aiResultDiv.className = 'result success';
+                    aiResultDiv.innerHTML = `
+                        <h3>🤖 AI Response</h3>
+                        <p><strong>Query:</strong> ${query}</p>
+                        <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            ${result.message}
+                        </div>
+                        <p><strong>Sources Found:</strong> ${result.ragDetails.documentsFound}</p>
+                        <p><strong>Vector Store:</strong> ${result.ragDetails.vectorStoreType}</p>
+                        ${result.sources.length > 0 ? `
+                            <p><strong>Sources:</strong></p>
+                            <ul>
+                                ${result.sources.map(source => `
+                                    <li>${source.title} (${source.relevance} relevant)</li>
+                                `).join('')}
+                            </ul>
+                        ` : ''}
+                    `;
+                } else {
+                    aiResultDiv.className = 'result error';
+                    aiResultDiv.innerHTML = `
+                        <h3>❌ AI Test Failed</h3>
+                        <p>${result.error}</p>
+                    `;
+                }
+                
+            } catch (error) {
+                const aiResultDiv = document.getElementById('aiResult');
+                aiResultDiv.style.display = 'block';
+                aiResultDiv.className = 'result error';
+                aiResultDiv.innerHTML = `
+                    <h3>❌ Network Error</h3>
+                    <p>Failed to test AI: ${error.message}</p>
+                `;
+            }
+            
+            document.getElementById('testBtn').disabled = false;
+            document.getElementById('testBtn').textContent = 'Test AI Response';
+        }
+
+        // Auto-populate sample data
+        document.getElementById('title').value = 'Contact Lens Care Training';
+    </script>
+</body>
+</html>
