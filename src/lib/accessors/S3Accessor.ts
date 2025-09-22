@@ -34,15 +34,22 @@ export class S3Accessor {
 
   constructor(
     private bucketName: string,
-    private region: string = 'us-east-1'
+    private region: string = 'us-west-2'
   ) {
+    // Use credentials from environment - supports both permanent and temporary credentials
+    const credentials: any = {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+    };
+    
+    // Add session token if available (for temporary credentials)
+    if (process.env.AWS_SESSION_TOKEN) {
+      credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
+    }
+
     this.s3Client = new S3Client({
       region: this.region,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-        ...(process.env.AWS_SESSION_TOKEN && { sessionToken: process.env.AWS_SESSION_TOKEN })
-      }
+      credentials
     });
   }
 

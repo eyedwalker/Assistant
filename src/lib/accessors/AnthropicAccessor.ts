@@ -98,14 +98,14 @@ export class AnthropicAccessor {
       ];
 
       console.log('🤖 Generating chat response with:', {
-        model: 'claude-opus-4-20250514',
+        model: 'claude-3-5-sonnet-20241022',
         messageCount: messages.length,
         systemPromptLength: systemPrompt.length
       });
 
       const response = await this.client.messages.create({
-        model: 'claude-opus-4-20250514',
-        max_tokens: 2000,
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 3000,
         system: systemPrompt, // Use system parameter instead of adding as user message
         messages: messages
       });

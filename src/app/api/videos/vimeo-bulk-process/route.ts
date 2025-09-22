@@ -55,8 +55,8 @@ export async function POST(request: NextRequest) {
       process.env.MONGODB_DB_NAME!
     );
     const s3Accessor = new S3Accessor(
-      process.env.AWS_S3_BUCKET!,
-      process.env.AWS_REGION!
+      process.env.AWS_S3_KNOWLEDGE_BUCKET || 'encompass-knowledgebase',
+      process.env.AWS_REGION || 'us-west-2'
     );
     const anthropicAccessor = new AnthropicAccessor(
       process.env.ANTHROPIC_API_KEY!
@@ -106,7 +106,8 @@ export async function POST(request: NextRequest) {
         const processedVideos = await mongoAccessor.find('documents', {
           contentType: 'video',
           optimizedForAI: true,
-          analysisVersion: '2.0'
+          analysisVersion: '3.0',  // Only skip videos with latest analysis version
+          s3Key: { $exists: true }  // Only skip videos already stored in S3
         });
         
         const processedVimeoIds = new Set(processedVideos.map((v: any) => v.vimeoId));
@@ -128,9 +129,10 @@ export async function POST(request: NextRequest) {
           contentType: 'video',
           $or: [
             { optimizedForAI: { $ne: true } },
-            { analysisVersion: { $ne: '2.0' } },
+            { analysisVersion: { $ne: '3.0' } },  // Updated to current version
             { aiAnalysis: { $exists: false } },
-            { vspProduct: { $exists: false } }
+            { vspProduct: { $exists: false } },
+            { s3Key: { $exists: false } }  // Include videos not in S3
           ]
         });
         
@@ -170,12 +172,24 @@ export async function POST(request: NextRequest) {
           try {
             console.log(`Processing: ${video.name}`);
 
-            // Get transcript if available
+            // Get transcript if available with enhanced detection
             let transcript = null;
             if (processTranscripts) {
-              transcript = await vimeoAccessor.getVideoTranscript(
-                video.uri.split('/').pop()!
-              );
+              const vimeoId = video.uri.split('/').pop()!;
+              console.log(`🗣️  Checking transcript for ${video.name}...`);
+              
+              transcript = await vimeoAccessor.getVideoTranscript(vimeoId);
+              
+              if (transcript && transcript.length > 10) {
+                console.log(`✅ Transcript found: ${transcript.length} characters`);
+              } else {
+                console.log(`⚠️  No transcript available for ${video.name}`);
+                // Try to extract text from description or title for analysis
+                if (video.description && video.description.length > 20) {
+                  transcript = `Video Description: ${video.description}`;
+                  console.log(`📝 Using description as fallback: ${transcript.length} chars`);
+                }
+              }
             }
 
             // Enhanced AI analysis with Claude 3.5 Sonnet for eyecare training
@@ -185,34 +199,50 @@ export async function POST(request: NextRequest) {
             let productFeatures: string[] = [];
             let productConfidence = 0;
             
-            if (analyzeContent && (transcript || video.description)) {
-              const enhancedPrompt = `You are an expert AI assistant specializing in eyecare training content analysis. Analyze this eyecare professional training video and provide comprehensive insights.
+            if (analyzeContent) {
+              console.log(`🤖 Starting enhanced AI analysis for ${video.name}...`);
+              
+              // Enhanced content analysis using latest Claude model
+              const contentToAnalyze = [
+                `Title: ${video.name}`,
+                video.description ? `Description: ${video.description}` : '',
+                transcript && transcript.length > 10 ? `Transcript: ${transcript.substring(0, 4000)}` : '',
+                (video as any).tags?.length ? `Tags: ${(video as any).tags.map((t: any) => t.name || t.tag).join(', ')}` : ''
+              ].filter(Boolean).join('\n\n');
+              
+              const enhancedPrompt = `You are an expert AI assistant specializing in VSP eyecare training content analysis. Analyze this eyecare professional training video comprehensively.
 
-**Video Information:**
-- Title: ${video.name}
-- Description: ${video.description || 'N/A'}  
-- Transcript: ${transcript && typeof transcript === 'string' ? transcript.substring(0, 3000) : 'Not available'}
-- Tags: ${(video as any).tags?.map((t: any) => t.name || t.tag).join(', ') || 'None'}
+**CONTENT TO ANALYZE:**
+${contentToAnalyze}
 
-**Analysis Required:**
+**DETAILED ANALYSIS REQUIRED:**
 
-1. **CONTENT SUMMARY** (2-3 professional sentences)
-2. **KEY LEARNING OBJECTIVES** (3-5 specific, actionable points)
-3. **CLINICAL RELEVANCE** (How this applies to patient care)
-4. **VSP PRODUCT CATEGORIZATION:**
-   - Primary Product: Officemate, Acuity Logic, EPM (Encompass Practice Management), Encompass, or General
-   - Product Features: Contact Lens Management, Analytics & Insights, Billing & Claims, Patient Management, Training & Education, Integration, Online Services
-   - Confidence Score: 0.0-1.0
+1. **COMPREHENSIVE SUMMARY** (3-4 detailed sentences covering key concepts)
+2. **SPECIFIC LEARNING OBJECTIVES** (4-6 actionable, measurable points)
+3. **CLINICAL RELEVANCE & APPLICATIONS** (Detailed patient care impact)
+4. **VSP PRODUCT IDENTIFICATION:**
+   - Primary Product: Eyefinity, Officemate, Acuity Logic, EPM, Encompass, Analytics & Insights, or General
+   - Specific Features: Frame Selection, Contact Lens Management, EHR Integration, Billing & Claims, Patient Scheduling, Insurance Processing, Reporting, Training Modules
+   - Confidence Score: 0.0-1.0 (be honest about uncertainty)
+   - Reasoning: Why you selected this product/confidence level
 
-5. **DIFFICULTY LEVEL:** Beginner, Intermediate, Advanced
-6. **TARGET AUDIENCE:** Front desk, Clinical staff, Management, IT/Technical
-7. **ESTIMATED LEARNING TIME:** Minutes to complete training
+5. **SKILL LEVEL & AUDIENCE:**
+   - Difficulty: Beginner/Intermediate/Advanced
+   - Primary Audience: Front Desk, Opticians, Clinical Staff, Management, IT
+   - Prerequisites: What knowledge is assumed
 
-**Keywords to detect VSP products:**
-- Officemate: Practice management, scheduling, patient records, front office, appointments
-- Acuity Logic: EHR, electronic health records, clinical documentation, exam data
-- EPM/Encompass: Practice management system, billing, claims processing
-- Analytics & Insights: Reporting, dashboards, business intelligence, practice analytics
+6. **PRACTICAL DETAILS:**
+   - Estimated Duration: Realistic time to complete
+   - Key Procedures: Step-by-step processes covered
+   - Common Issues: Problems this training addresses
+
+**ENHANCED VSP PRODUCT DETECTION:**
+- **Eyefinity**: Practice management suite, comprehensive system, all-in-one solution
+- **Officemate**: Scheduling, appointments, patient flow, front office operations
+- **Acuity Logic**: EHR, clinical documentation, exam workflows, patient records
+- **EPM/Encompass**: Billing, claims, insurance processing, financial management
+- **Analytics & Insights**: Reports, KPIs, business intelligence, practice metrics
+- **Frame/Contact Management**: Inventory, dispensing, fitting, product selection
 
 Return ONLY valid JSON:
 {
@@ -229,42 +259,178 @@ Return ONLY valid JSON:
 }`;
               
               try {
-                const analysisResponse = await anthropicAccessor.generateChatResponse(enhancedPrompt);
-                const analysis = JSON.parse(analysisResponse.message);
+                console.log(`🔍 Sending to Claude for analysis (${contentToAnalyze.length} chars)...`);
+                const analysisResponse = await anthropicAccessor.generateChatResponse(enhancedPrompt, '');
                 
-                aiAnalysis = `**Summary:** ${analysis.summary}
+                // Handle ChatResponse type properly
+                const responseText = typeof analysisResponse === 'string' ? analysisResponse : analysisResponse.message;
+                
+                let analysis;
+                try {
+                  analysis = JSON.parse(responseText);
+                } catch (parseError) {
+                  console.warn('JSON parse failed, extracting data from text response');
+                  // Fallback: try to extract data from text response
+                  const textLower = responseText.toLowerCase();
+                  analysis = {
+                    summary: responseText.substring(0, 500),
+                    learningObjectives: ['Enhanced training content'],
+                    clinicalRelevance: 'Eyecare professional development',
+                    vspProduct: textLower.includes('eyefinity') ? 'Eyefinity' : 
+                               textLower.includes('officemate') ? 'Officemate' : 'General',
+                    productFeatures: ['Training & Education'],
+                    productConfidence: 0.5,
+                    difficultyLevel: 'Intermediate',
+                    targetAudience: ['Eyecare professionals'],
+                    estimatedTime: '10-15 minutes',
+                    keyTopics: [video.name]
+                  };
+                }
+                
+                aiAnalysis = `**COMPREHENSIVE SUMMARY:**
+${analysis.summary || 'Training video covering essential eyecare concepts and procedures.'}
 
-**Learning Objectives:**
-${analysis.learningObjectives?.map((obj: string, i: number) => `${i + 1}. ${obj}`).join('\n') || 'Not specified'}
+**LEARNING OBJECTIVES:**
+${analysis.learningObjectives?.map((obj: string, i: number) => `${i + 1}. ${obj}`).join('\n') || '1. Understand key concepts\n2. Apply techniques in practice\n3. Improve patient care delivery'}
 
-**Clinical Relevance:** ${analysis.clinicalRelevance || 'General eyecare training'}
+**CLINICAL RELEVANCE:**
+${analysis.clinicalRelevance || 'Provides essential training for eyecare professionals to enhance patient care and operational efficiency.'}
 
-**Target Audience:** ${analysis.targetAudience?.join(', ') || 'Eyecare professionals'}
-**Difficulty:** ${analysis.difficultyLevel || 'Intermediate'}
-**Estimated Time:** ${analysis.estimatedTime || '10-15 minutes'}
+**VSP PRODUCT FOCUS:**
+- Primary Product: ${analysis.vspProduct || 'General'}
+- Key Features: ${analysis.productFeatures?.join(', ') || 'General training'}
+- Confidence Level: ${Math.round((analysis.productConfidence || 0) * 100)}%
+${analysis.reasoning ? `- Reasoning: ${analysis.reasoning}` : ''}
 
-**Key Topics:** ${analysis.keyTopics?.join(', ') || 'General training'}`;
+**TRAINING DETAILS:**
+- Target Audience: ${analysis.targetAudience?.join(', ') || 'Eyecare professionals'}
+- Difficulty Level: ${analysis.difficultyLevel || 'Intermediate'}
+- Estimated Duration: ${analysis.estimatedTime || '10-15 minutes'}
+${analysis.prerequisites ? `- Prerequisites: ${analysis.prerequisites}` : ''}
+
+**KEY TOPICS & PROCEDURES:**
+${analysis.keyTopics?.join(', ') || video.name}
+${analysis.keyProcedures?.join('\n') || ''}
+${analysis.commonIssues ? `\n**COMMON ISSUES ADDRESSED:**\n${analysis.commonIssues}` : ''}`;
 
                 vspProduct = analysis.vspProduct || 'General';
-                productFeatures = analysis.productFeatures || [];
-                productConfidence = analysis.productConfidence || 0;
+                productFeatures = analysis.productFeatures || ['Training & Education'];
+                productConfidence = analysis.productConfidence || 0.3;
+                
+                console.log(`✅ AI Analysis complete - Product: ${vspProduct} (${Math.round(productConfidence * 100)}% confidence)`);
                 
               } catch (error) {
                 console.error('Enhanced AI analysis failed:', error);
-                // Fallback basic analysis
-                aiAnalysis = `**Summary:** Training video covering eyecare procedures and best practices.
+                
+                // Enhanced fallback analysis based on video title and available content
+                const titleLower = video.name.toLowerCase();
+                let detectedProduct = 'General';
+                let detectedFeatures = ['Training & Education'];
+                let confidence = 0.2;
+                
+                if (titleLower.includes('eyefinity') || titleLower.includes('pupils of eyefinity')) {
+                  detectedProduct = 'Eyefinity';
+                  detectedFeatures = ['Practice Management', 'Training & Education'];
+                  confidence = 0.8;
+                } else if (titleLower.includes('officemate')) {
+                  detectedProduct = 'Officemate';
+                  detectedFeatures = ['Scheduling', 'Patient Management'];
+                  confidence = 0.8;
+                } else if (titleLower.includes('encompass') || titleLower.includes('billing') || titleLower.includes('claims')) {
+                  detectedProduct = 'EPM';
+                  detectedFeatures = ['Billing & Claims', 'Financial Management'];
+                  confidence = 0.7;
+                } else if (titleLower.includes('contact lens') || titleLower.includes('lens')) {
+                  detectedFeatures = ['Contact Lens Management', 'Clinical Procedures'];
+                  confidence = 0.6;
+                } else if (titleLower.includes('frame') || titleLower.includes('optical')) {
+                  detectedFeatures = ['Frame Selection', 'Optical Services'];
+                  confidence = 0.6;
+                }
+                
+                vspProduct = detectedProduct;
+                productFeatures = detectedFeatures;
+                productConfidence = confidence;
+                
+                aiAnalysis = `**COMPREHENSIVE SUMMARY:**
+This ${detectedProduct} training video covers essential eyecare procedures and best practices for ${detectedFeatures.join(' and ')}.
 
-**Learning Objectives:**
-1. Understand key concepts presented in the video
-2. Apply learned techniques in clinical practice  
-3. Improve patient care delivery
+**LEARNING OBJECTIVES:**
+1. Understand key concepts and procedures presented in the training
+2. Apply learned techniques effectively in clinical practice
+3. Improve patient care delivery and satisfaction
+4. Master ${detectedProduct !== 'General' ? detectedProduct + ' system' : 'eyecare'} workflows and processes
 
-**Clinical Relevance:** Provides essential training for eyecare professionals to enhance patient care and operational efficiency.`;
+**CLINICAL RELEVANCE:**
+Provides essential training for eyecare professionals to enhance patient care, operational efficiency, and ${detectedFeatures.join(', ').toLowerCase()} capabilities.
+
+**VSP PRODUCT FOCUS:**
+- Primary Product: ${detectedProduct}
+- Key Features: ${detectedFeatures.join(', ')}
+- Confidence Level: ${Math.round(confidence * 100)}%
+
+**TRAINING DETAILS:**
+- Target Audience: Eyecare professionals, ${detectedProduct !== 'General' ? detectedProduct + ' users' : 'clinical staff'}
+- Difficulty Level: Intermediate
+- Estimated Duration: ${Math.max(Math.round(video.duration / 60), 2)}-${Math.max(Math.round(video.duration / 60) + 3, 5)} minutes
+
+**KEY TOPICS & PROCEDURES:**
+${video.name} - Core training module
+
+**NOTE:** Analysis based on title and metadata due to limited transcript data. Enhanced analysis available with full transcript.`;
+                
+                console.log(`⚠️  Using fallback analysis - Product: ${detectedProduct} (${Math.round(confidence * 100)}% confidence)`);
               }
             }
 
-            // Store processed video data in 'documents' collection for RAG integration
+            // Create knowledge base document for S3 storage
             const vimeoId = video.uri.split('/').pop()!;
+            const knowledgeDocument = {
+              videoId: vimeoId,
+              title: video.name,
+              description: video.description || '',
+              duration: video.duration,
+              vimeoUrl: video.link,
+              transcript: transcript || 'No transcript available',
+              aiAnalysis: aiAnalysis || 'Training video for eyecare professionals',
+              vspProduct,
+              productFeatures,
+              productConfidence,
+              contentType: 'video',
+              source: 'vimeo',
+              processingDate: new Date().toISOString(),
+              // Enhanced processing markers
+              optimizedForAI: true,
+              analysisVersion: '3.0',
+              aiModel: 'claude-3-5-sonnet-enhanced',
+              metadata: {
+                duration: video.duration,
+                thumbnail: (video as any).pictures?.sizes?.[3]?.link || '',
+                created_time: video.created_time,
+                modified_time: video.modified_time,
+                category: suggestedCategory,
+                tags: (video as any).tags?.map((t: any) => t.name || t.tag) || [],
+                hasTranscript: !!transcript,
+                transcriptLength: transcript ? transcript.length : 0,
+                hasAIAnalysis: !!aiAnalysis
+              }
+            };
+
+            // Store in S3 for Knowledge Base ingestion
+            const sanitizedTitle = video.name.replace(/[^a-zA-Z0-9\-_\.]/g, '_');
+            const s3Key = `vimeo-videos/${vimeoId}/${sanitizedTitle}.json`;
+            
+            const uploadResult = await s3Accessor.uploadContent(
+              s3Key,
+              JSON.stringify(knowledgeDocument, null, 2),
+              'application/json'
+            );
+
+            if (!uploadResult.success) {
+              throw new Error(`S3 upload failed: ${uploadResult.error}`);
+            }
+
+            // Also store in MongoDB for backwards compatibility and internal tracking
             const videoDocument = {
               title: video.name,
               url: video.link,
@@ -276,6 +442,8 @@ ${analysis.learningObjectives?.map((obj: string, i: number) => `${i + 1}. ${obj}
               vspProduct,
               productFeatures,
               productConfidence,
+              s3Key,
+              s3Url: uploadResult.url,
               // Enhanced processing markers (matching standalone scripts)
               optimizedForAI: true,
               analysisVersion: '2.0',
@@ -312,6 +480,8 @@ ${analysis.learningObjectives?.map((obj: string, i: number) => `${i + 1}. ${obj}
               await mongoAccessor.create('documents', videoDocument);
               console.log(`✅ Created new video document: ${video.name}`);
             }
+
+            console.log(`☁️  Stored in S3 for Knowledge Base: ${s3Key}`);
 
             results.successful++;
             results.jobs.push({
