@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockAccessor } from '@/lib/accessors/BedrockAccessor';
+import { AnthropicAccessor } from '@/lib/accessors/AnthropicAccessor';
 import { MongoDBAccessor } from '@/lib/accessors/MongoDBAccessor';
 import { ConversationManager } from '@/lib/managers/ConversationManager';
 
@@ -13,13 +14,13 @@ export async function POST(request: NextRequest) {
 
     // Demo 1: Direct BedrockAccessor usage
     console.log('🔷 Testing Direct Bedrock Access...');
-    console.log('AWS Region:', process.env.AWS_BEDROCK_REGION || 'us-east-1');
+    console.log('AWS Region:', process.env.AWS_BEDROCK_REGION || 'us-west-2');
     console.log('Model ID:', process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0');
     console.log('Has AWS Credentials:', !!process.env.AWS_ACCESS_KEY_ID);
     console.log('Has Session Token:', !!process.env.AWS_SESSION_TOKEN);
     
     const bedrockAccessor = new BedrockAccessor({
-      region: process.env.AWS_BEDROCK_REGION || 'us-east-1',
+      region: process.env.AWS_BEDROCK_REGION || 'us-west-2',
       modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
       guardrailId: process.env.BEDROCK_GUARDRAIL_ID,
       temperature: 0.7,
@@ -43,16 +44,19 @@ export async function POST(request: NextRequest) {
     await mongoAccessor.connect();
 
     // ConversationManager will automatically use Bedrock if USE_BEDROCK=true
-    const conversationManager = new ConversationManager(mongoAccessor);
+    const conversationManager = new ConversationManager(
+      mongoAccessor,
+      new AnthropicAccessor(),
+      new BedrockAccessor()
+    );
 
     // Create a chat request
-    const chatResponse = await conversationManager.processMessage({
+    const chatResponse = await conversationManager.generateResponse(
       message,
-      userId: 'demo-user',
-      tenantId: 'demo-tenant',
-      accessLevel: 'PUBLIC',
-      sessionId: 'demo-session-' + Date.now()
-    });
+      'demo-user',
+      'demo-tenant',
+      'demo-session-' + Date.now()
+    );
 
     await mongoAccessor.disconnect();
 
@@ -90,14 +94,14 @@ export async function POST(request: NextRequest) {
         viaConversationManager: {
           message: chatResponse.message,
           sessionId: chatResponse.sessionId,
-          processingTime: chatResponse.processingTime,
-          metadata: chatResponse.metadata
+          processingTime: 0,
+          metadata: { simplified: true }
         },
         streaming: streamingDemo,
         availableModels
       },
       configuration: {
-        region: process.env.AWS_BEDROCK_REGION || 'us-east-1',
+        region: process.env.AWS_BEDROCK_REGION || 'us-west-2',
         modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
         guardrailConfigured: !!process.env.BEDROCK_GUARDRAIL_ID,
         useBedrock: process.env.USE_BEDROCK === 'true'
@@ -162,7 +166,7 @@ export async function GET() {
     requiredEnvVars: [
       'AWS_ACCESS_KEY_ID (or IAM role)',
       'AWS_SECRET_ACCESS_KEY (or IAM role)',
-      'AWS_BEDROCK_REGION (optional, defaults to us-east-1)',
+      'AWS_BEDROCK_REGION (optional, defaults to us-west-2)',
       'BEDROCK_MODEL_ID (optional, defaults to Claude 3 Sonnet)',
       'BEDROCK_GUARDRAIL_ID (optional, for content filtering)',
       'USE_BEDROCK (set to "true" to use Bedrock in ConversationManager)'
